@@ -106,17 +106,57 @@ a profile and exercise it from a real session.
 plugin_manager action=install_bundle target="file:<ABS-PATH-TO-REPO>"
 ```
 
-A `file:` install is a **copy**, and DSH decides whether to update it by version
-number, while the running host keeps the already-loaded module in its ESM cache.
-So editing the source has no effect. The update loop is:
+A `file:` install is a **copy**, and the running host keeps the already-loaded
+module in its ESM cache, so editing the source has no effect. The update loop is:
 
 > bump `version` → `remove_bundle` → `install_bundle` → **restart DSH**
+
+The `remove_bundle` step is **not optional, and bumping the version is not
+enough.** pnpm keys a `file:` directory dependency by its *specifier*, which
+does not change when you edit the source, so a plain re-install decides there is
+nothing to do and leaves the old copy in place — while still reporting success.
+The pnpm log shows it plainly:
+
+```text
+# install_bundle alone, version already bumped to 0.2.0
+Packages: +14 -10
+Done in 1.4s using pnpm v11.7.0          # no `dependencies:` section — nothing changed
+
+# remove_bundle, then install_bundle
+dependencies:
+- dsh-doc-router file:D:/dsh-plugins/dsh-doc-router   # remove
+dependencies:
++ dsh-doc-router file:D:/dsh-plugins/dsh-doc-router   # install — now it re-copies
+```
+
+So check for the `dependencies: +` line in the operation log. If it is absent,
+the copy was not refreshed no matter what the operation reported.
+
+Two more things worth knowing before you conclude an install failed:
+
+- **A reported `timedOut` does not mean the work did not happen.** DSH kills the
+  package-manager child if it prints nothing for 600 s; pnpm had in fact finished
+  its linking seconds earlier, and the operation was still marked failed. Always
+  verify the result on disk (below) before retrying.
+- **`remove_bundle` is safe to run**: it prunes the dependency and rewrites the
+  manifest, and `install_bundle` restores it. Do not restart DSH in between, or
+  the plugin will simply be absent from that session.
 
 To confirm the new copy is the one running, call `doc_route` on any file: its
 last output line is `dsh-doc-router v<version>`, read from the loaded copy's own
 `package.json`. If that still shows the old version, the host is serving the
 cached module — restart it. Do not try to infer the loaded version from
 behaviour; that is exactly how a stale copy stayed installed unnoticed.
+
+To confirm the copy on disk without starting DSH at all, compare hashes against
+the checkout:
+
+```bash
+# the installed copy must be byte-identical to the source
+for f in package.json lib/index.js lib/docprobe.py cordis.patch.yml; do
+  diff <(sha256sum "$f") <(sha256sum "$INSTALLED/$f")
+done
+```
 
 ### A claim that was wrong, recorded so it is not repeated
 
