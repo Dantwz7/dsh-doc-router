@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-10-01
+
+Everything here came out of a trial run over a real corpus of 71 published PDFs
+and one DOCX (a review's reference library: ACS / Wiley / Science / Nature /
+Sci. Adv. / arXiv, 2–83 pages, Chinese directory and file names). The trial
+report and the follow-up investigation are reproduced in the fixes below.
+
+### Fixed
+
+- **A column count that cannot be measured is no longer reported as
+  single-column.** `columns: unknown` shared a branch with `single-column`, so a
+  file whose layout the probe could not measure was routed to `markitdown` with
+  a note asserting "single-column with a text layer". For a genuinely
+  multi-column paper that is exactly the failure this plugin exists to prevent,
+  and it looked like success. `unknown` now routes to `pdf_markdown` — the cheap
+  direction under the plugin's own asymmetric bet — and the note says the column
+  count could not be determined.
+- **A full-height margin stamp is no longer counted as a column.** Publishers
+  print a rotated "Downloaded from …" string down the page edge: about 7 pt wide
+  but spanning the whole page height, so it lands in *every* horizontal band.
+  The estimator correctly excluded edge artefacts from its gap list and then
+  returned the **unfiltered** segment count, so a two-column paper reported
+  three columns. On the trial corpus this hit **18 of 74** files (every 2-column
+  ACS / Wiley / Sci. Adv. / Nano Lett. paper, plus Science reporting 4 for its
+  3-column layout). Routing was unaffected — only the qualitative verdict
+  matters — but `column_estimate` and the per-page `Probe detail` were wrong.
+- **A malformed `pages` value no longer leaks an internal exception class name.**
+  The message is written for the user, but reached them as
+  `Error: ValueError: invalid page selection 'abc' …`, which reads like a stack
+  trace escaping.
+
+### Added
+
+- Two regression fixtures, both verified to fail against the pre-0.2.1 code:
+  - `two-column-watermark.pdf` — two real columns plus a rotated full-height
+    margin stamp; asserts `column_estimate: 2`, not 3.
+  - `unknown-columns.pdf` — a text-bearing PDF whose pages carry no usable band
+    evidence; asserts `columns: unknown` **and** `recommend: [pdf_markdown]`.
+- Five tests covering the fixes above, including one asserting the `unknown`
+  note never contains 单栏, and one asserting the page-selection error never
+  contains `ValueError`.
+
+### Notes
+
+- Verified against the trial corpus: the estimator fix changes **exactly** the
+  18 files a human had flagged by eye as over-estimated, and leaves the other 56
+  (including every single-column SI) untouched.
+- The trial report suggested eliminating `unknown` by sampling more pages. That
+  was tested and **does not work**: the cause is not the sampling, it is that
+  `_column_profile` needs several text blocks to measure bands, and the two
+  affected files have either one large block per page or many sub-25-character
+  fragments. Re-sampling cannot help, and reducing `unknown` at all would push
+  files from the safe side toward the dangerous one — so `unknown` is kept, and
+  made safe.
+
 ## [0.2.0] — 2026-10-01
 
 First public release: the same routing engine, packaged as a distributable
@@ -104,7 +159,8 @@ open-source project.
 - `lib/docprobe.py`, a stdlib + PyMuPDF probe that degrades instead of crashing
   when PyMuPDF is absent, and always answers in JSON.
 
-[Unreleased]: https://github.com/<your-github-user>/dsh-doc-router/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/<your-github-user>/dsh-doc-router/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/<your-github-user>/dsh-doc-router/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/<your-github-user>/dsh-doc-router/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/<your-github-user>/dsh-doc-router/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/<your-github-user>/dsh-doc-router/releases/tag/v0.1.0

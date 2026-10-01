@@ -120,14 +120,22 @@ def _band_columns(intervals: list[tuple[float, float]], width: float) -> int:
     if len(merged) < 2:
         return 1
     min_gap = max(6.0, width * 0.012)
-    interior = [
-        i
-        for i in range(len(merged) - 1)
-        if merged[i + 1][0] - merged[i][1] >= min_gap
-        and merged[i][1] > width * 0.15
-        and merged[i + 1][0] < width * 0.88
-    ]
-    return len(merged) if interior else 1
+    # 只数「被合格内部分隔切开的组数」。
+    #
+    # 边缘的窄块必须排除：出版商会在页边压一条竖排的 "Downloaded from ..."
+    # 水印，宽约 6pt 却纵贯整页，于是它落进**每一个**横带。早先这里写成
+    # `return len(merged) if interior else 1`——过滤器算出了正确的 interior，
+    # 返回值却把被排除的边缘块又数了回去，2 栏版式因此被系统性高估成 3 栏
+    # （实测 74 篇真实论文中 18 篇中招）。
+    columns = 1
+    for i in range(len(merged) - 1):
+        if (
+            merged[i + 1][0] - merged[i][1] >= min_gap
+            and merged[i][1] > width * 0.15
+            and merged[i + 1][0] < width * 0.88
+        ):
+            columns += 1
+    return columns
 
 
 def _column_profile(page) -> tuple[float, float] | None:
@@ -266,9 +274,24 @@ def route(path: Path) -> dict:
                 "markitdown 会把正文切成表格碎片，pypdf 会丢结构"
             )
             notes.append("需精确核对公式/上下标/数字时，再对该页渲染成图校验")
-        else:
+        elif extra.get("columns") == "single-column":
             out["recommend"] = ["markitdown", "pypdf"]
             notes.append("单栏有文字层 → 两者皆可；markitdown 免审批、pypdf 更省 token")
+        else:
+            # columns == "unknown"：抽样页都测不出文字带分布（正文被切成大量
+            # 短块，或少数超大块），因此单栏与多栏**无从区分**。
+            #
+            # 这里必须走安全侧。判错方向的代价不对称：把单栏交给 pdf_markdown
+            # 只是慢一点，把多栏交给 markitdown 会毁掉正文。早先 unknown 与
+            # single-column 共用同一个 else 分支，于是 unknown 被送去 markitdown，
+            # 提示语还硬编码断言「单栏有文字层」——一个测不准的状态被说成了
+            # 一个确定的结论。
+            out["recommend"] = ["pdf_markdown"]
+            notes.append(
+                "未能判定栏数（文字带分布测不出来）→ 按安全侧走 pdf_markdown；"
+                "多栏正文交给 markitdown 会被切成表格碎片"
+            )
+            notes.append("需精确核对公式/上下标/数字时，再对该页渲染成图校验")
 
     elif fmt in _OFFICE_FMTS:
         out["recommend"] = ["markitdown"]
@@ -302,8 +325,17 @@ def route(path: Path) -> dict:
 # ---------------------------------------------------------------- 版面感知提取
 
 
-def _page_error(chunk: str, spec: str, detail: str) -> ValueError:
-    return ValueError(
+class PageSelectionError(ValueError):
+    """页码语法错误。
+
+    单独成类，只为让入口**只回显信息本身**：这条消息是写给使用者的
+    （「哪个 chunk 非法、支持哪些写法」），前缀一个内部异常类名
+    （`Error: ValueError: ...`）读起来像栈信息漏了出来。
+    """
+
+
+def _page_error(chunk: str, spec: str, detail: str) -> PageSelectionError:
+    return PageSelectionError(
         f"invalid page selection {chunk!r} in {spec!r}: {detail}; "
         'expected forms like "3", "1-3" or "1,4,7"'
     )
@@ -427,6 +459,10 @@ def main(argv: list[str]) -> int:
         else:
             print(json.dumps({"error": f"unknown mode: {mode}"}, ensure_ascii=False))
             return 2
+    except PageSelectionError as exc:
+        # 消息本身已经是给使用者的完整说明，不再加异常类名前缀。
+        print(json.dumps({"error": str(exc)}, ensure_ascii=False))
+        return 1
     except Exception as exc:  # 让插件侧拿到可读原因而不是 traceback
         print(
             json.dumps(

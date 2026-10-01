@@ -58,6 +58,16 @@ test('doc_route sends a scan to the image pipeline and a one-column PDF to marki
     assert.deepEqual(single.recommend, ['markitdown', 'pypdf']);
 });
 
+test('doc_route sends an unmeasurable layout to pdf_markdown, not to markitdown', { skip }, async () => {
+    const tool = toolNamed(pluginForTests(), 'doc_route');
+    const result = await tool.execute({ path: fixture('unknown-columns.pdf') }, makeExec());
+
+    assert.equal(result.columns, 'unknown');
+    assert.equal(result.text_layer, true);
+    assert.deepEqual(result.recommend, ['pdf_markdown']);
+    assert.match(result.notes, /未能判定栏数/);
+});
+
 test('doc_route handles Office, image and text inputs', { skip }, async () => {
     const tool = toolNamed(pluginForTests(), 'doc_route');
     const expectations = [

@@ -22,6 +22,8 @@ fixtures that no longer test what they claim.
 | File | Branch it exercises |
 |---|---|
 | `two-column.pdf` | Real two-column geometry → `columns: multi-column`, est 2 → `pdf_markdown` |
+| `two-column-watermark.pdf` | Two columns plus a full-height ~7pt margin stamp → still est **2**, not 3 |
+| `unknown-columns.pdf` | Text present but one block per page → `columns: unknown` → `pdf_markdown` (safe side) |
 | `single-column.pdf` | One text box → `columns: single-column` → `markitdown` / `pypdf` |
 | `scanned.pdf` | JPEG-only page, zero text layer → `render_to_png + read_image` |
 | `sample.docx` | ZIP container containing `word/document.xml` → `docx` |
@@ -45,6 +47,20 @@ genuinely is not a Word document keeps the fixture small and makes it obvious
 that only the magic-byte path is under test. Do not "fix" them into real Office
 files, and do not use them to test conversion — conversion is not what they
 cover.
+
+## Regeneration is not byte-reproducible
+
+Running `generate.py` rewrites every binary fixture, including ones whose
+*content* did not change: PyMuPDF stamps each PDF with a random `/ID`, and the
+ZIP-based Office writers embed timestamps. Regenerating therefore leaves a dirty
+working tree even when nothing meaningful changed.
+
+Check `git status` before committing a regeneration and restore the fixtures you
+did not intend to touch:
+
+```bash
+git checkout -- tests/fixtures/            # keep only the intended changes
+```
 
 ## Binary fixtures are committed on purpose
 

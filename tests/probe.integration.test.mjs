@@ -37,6 +37,28 @@ test('route classifies every fixture as documented', { skip: !interpreter.availa
             recommend: ['pdf_markdown'],
         },
         {
+            // A full-height ~7pt margin stamp must not be counted as a column:
+            // it lands in every band, so the naive count reported 3 columns for
+            // a two-column paper (18 of 74 real PDFs in a trial corpus).
+            file: 'two-column-watermark.pdf',
+            format: 'pdf',
+            columns: 'multi-column',
+            column_estimate: 2,
+            text_layer: true,
+            recommend: ['pdf_markdown'],
+        },
+        {
+            // Text present, but in one block per page: no column evidence at
+            // all. Must stay `unknown` and go to the safe side, never be
+            // asserted to be single-column.
+            file: 'unknown-columns.pdf',
+            format: 'pdf',
+            columns: 'unknown',
+            column_estimate: null,
+            text_layer: true,
+            recommend: ['pdf_markdown'],
+        },
+        {
             file: 'single-column.pdf',
             format: 'pdf',
             columns: 'single-column',
@@ -141,12 +163,43 @@ test('a malformed page selection names the offending chunk', { skip: !interprete
     const { parsed } = probe(['markdown', fixture('two-column.pdf'), '--pages', 'abc']);
     assert.match(parsed.error, /invalid page selection 'abc'/);
     assert.match(parsed.error, /expected forms like/);
+    // The message is written for the user, so no internal exception class name
+    // may leak into it (`Error: ValueError: ...` reads like a stack trace).
+    assert.doesNotMatch(parsed.error, /ValueError/);
 
     const open_ended = probe(['markdown', fixture('two-column.pdf'), '--pages', '1-']);
     assert.match(open_ended.parsed.error, /open-ended ranges are not supported/);
 
     const reversed = probe(['markdown', fixture('two-column.pdf'), '--pages', '3-1']).parsed;
     assert.deepEqual(reversed.pages_used, [1], 'a reversed range is normalised, not rejected');
+});
+
+test('an undecidable layout is routed to the safe side, not asserted to be single-column', { skip: !interpreter.available && interpreter.reason }, async () => {
+    // Regression: `unknown` and `single-column` used to share one branch, so a
+    // file whose layout could not be measured was sent to markitdown with a
+    // note asserting "single-column". For a genuinely multi-column paper that
+    // is the failure mode this plugin exists to prevent — and it looks like
+    // success. Guessing wrong is asymmetric: pdf_markdown on a single-column
+    // file merely costs time; markitdown on a multi-column file destroys the
+    // body text.
+    const { parsed } = probe(['route', fixture('unknown-columns.pdf')]);
+    assert.equal(parsed.columns, 'unknown');
+    assert.deepEqual(parsed.recommend, ['pdf_markdown']);
+    assert.equal(parsed.text_layer, true, 'a text layer exists; this is not a scan');
+    const notes = parsed.notes.join(' ');
+    assert.match(notes, /未能判定栏数/);
+    assert.doesNotMatch(notes, /单栏/, 'must not claim a single column it never measured');
+});
+
+test('a margin stamp is not counted as a column', { skip: !interpreter.available && interpreter.reason }, async () => {
+    // Regression: the estimator filtered edge artefacts out of its gap list but
+    // then returned the *unfiltered* segment count, so a ~7pt full-height
+    // publisher stamp (which lands in every band) made a two-column paper
+    // report three columns. Verified against a 74-paper corpus: 18 files hit it.
+    const stamped = probe(['route', fixture('two-column-watermark.pdf')]).parsed;
+    const plain = probe(['route', fixture('two-column.pdf')]).parsed;
+    assert.equal(stamped.columns, 'multi-column');
+    assert.equal(stamped.column_estimate, plain.column_estimate, 'same layout, same estimate');
 });
 
 test('markdown refuses anything that is not a real PDF', { skip: !interpreter.available && interpreter.reason }, async (t) => {

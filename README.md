@@ -43,7 +43,7 @@ Three artifacts:
 ## Install
 
 ```bash
-plugin_manager action=install_bundle target="dsh-doc-router@0.2.0"
+plugin_manager action=install_bundle target="dsh-doc-router@0.2.1"
 ```
 
 Pin the exact version. DSH's package manager applies a minimum-release-age
@@ -96,12 +96,18 @@ Every rule is **deterministic** — no model call, no network, no token cost.
 |---|---|
 | Format | File **magic bytes**, never the extension. ZIP containers are opened and their contents inspected to separate docx / xlsx / pptx / epub / odt |
 | Text layer | characters per page < 120 ⇒ treated as a scan |
-| Single vs multi column | per horizontal band, merge text intervals and count the segments separated by interior whitespace; **any** body page being multi-column ⇒ multi-column |
+| Single vs multi column | per horizontal band, merge text intervals and count the segments separated by interior whitespace; **any** body page being multi-column ⇒ multi-column. Edge artefacts — a publisher's full-height margin stamp, a header or footer — are excluded: they are narrow but span the whole page, so they land in every band |
 
 The last rule is a deliberately asymmetric bet: `pymupdf4llm` handles
 single-column pages fine, whereas missing a multi-column page hands the body
 text to a converter that destroys it. One misclassification is cheap, the other
 is not.
+
+The same bet decides what happens when the column count **cannot be measured** —
+a page whose text arrives as one large block, or as many short fragments, yields
+no usable band evidence. That verdict is reported honestly as `unknown` and
+routed to `pdf_markdown`, never asserted to be single-column: guessing "one
+column" is the expensive direction, so an unmeasurable file takes the cheap one.
 
 The resulting routes:
 
@@ -109,6 +115,7 @@ The resulting routes:
 |---|---|
 | multi-column + text layer | `pdf_markdown` |
 | single-column + text layer | `markitdown` (fallback: `pypdf`) |
+| column count undecidable (`unknown`) + text layer | `pdf_markdown` — the safe side |
 | no text layer | render to PNG → `read_image` |
 | docx / xlsx / pptx / epub / odt / csv / html / json / xml | `markitdown` |
 | image | `read_image` |

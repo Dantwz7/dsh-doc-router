@@ -37,7 +37,7 @@
 ## 安装
 
 ```bash
-plugin_manager action=install_bundle target="dsh-doc-router@0.2.0"
+plugin_manager action=install_bundle target="dsh-doc-router@0.2.1"
 ```
 
 **请写精确版本。** DSH 的包管理器有最小发布年龄策略，只写包名可能悄悄解析到旧版本。
@@ -87,10 +87,14 @@ pdf_markdown({ path: "paper.pdf", output: "paper.md" })
 |---|---|
 | 格式 | 文件头**魔数**，从不看扩展名。ZIP 容器会进内部看目录结构，区分 docx / xlsx / pptx / epub / odt |
 | 有无文字层 | 字符数/页 < 120 → 视为扫描件 |
-| 单栏/多栏 | 逐条横带合并文本区间，数被「内部空白」隔开的段数；**任一正文页多栏即判多栏** |
+| 单栏/多栏 | 逐条横带合并文本区间，数被「内部空白」隔开的段数；**任一正文页多栏即判多栏**。边缘块（出版商的竖排水印、页眉页脚）不计入：它们虽窄，却纵贯整页，会落进每一条横带 |
 
 最后一条是刻意的不对称下注：`pymupdf4llm` 对单栏同样适用，而漏判会把多栏交给
 会毁掉正文的转换器。一种误判很便宜，另一种不是。
+
+同一个下注也决定了**测不出栏数**时怎么办——某页正文只有一个大块、或全是碎片短块，
+就给不出可用的横带证据。这种判定如实报为 `unknown`，并路由到 `pdf_markdown`，
+**绝不**被说成单栏：猜「单栏」是昂贵的方向，测不准的文件走便宜的那条。
 
 判据给出的路由：
 
@@ -98,6 +102,7 @@ pdf_markdown({ path: "paper.pdf", output: "paper.md" })
 |---|---|
 | 多栏 + 有文字层 | `pdf_markdown` |
 | 单栏 + 有文字层 | `markitdown`（兜底 `pypdf`） |
+| 栏数测不出（`unknown`）+ 有文字层 | `pdf_markdown`，安全侧 |
 | 无文字层 | 渲染 PNG → `read_image` |
 | docx / xlsx / pptx / epub / odt / csv / html / json / xml | `markitdown` |
 | 图片 | `read_image` |

@@ -45,8 +45,13 @@ TOP, BOTTOM = 64.0, 782.0
 GUTTER = 30.0
 FONT, SIZE, LEADING = "helv", 9.5, 12.0
 
-SENTENCES = (
-    "Document routing decides which extraction pipeline a file deserves.",
+# Synthetic stand-in for the publisher stamp that runs down a PDF's page edge.
+MARGIN_STAMP = (
+    "15214095, 2024, 15, Downloaded from https://example.invalid/library "
+    "by a subscribing institution on 01 October 2026. "
+) * 6
+
+SENTENCES = (    "Document routing decides which extraction pipeline a file deserves.",
     "A converter that ignores page geometry will interleave columns of text.",
     "The probe reads the file header instead of trusting the extension.",
     "Layout is measured per horizontal band, not from the page as a whole.",
@@ -117,6 +122,64 @@ def build_pdf(path: Path, columns: int, seed: int, gap_lines: int) -> None:
         _draw_column(page, MARGIN, col_w, paragraphs(rng, 6), gap_lines)
         _draw_column(page, MARGIN + col_w + GUTTER, col_w, paragraphs(rng, 6), gap_lines)
 
+    doc.save(str(path))
+    doc.close()
+
+
+def build_watermarked_pdf(path: Path, seed: int, gap_lines: int) -> None:
+    """Two real columns plus a full-height, ~7pt-wide margin stamp.
+
+    Publishers (Wiley, ACS) print a rotated "Downloaded from ..." string down
+    the page edge. It is narrow but spans the whole page height, so it lands in
+    *every* horizontal band. Counting it as a column made the estimator report
+    three columns for a two-column paper — on a real 74-paper corpus that hit 18
+    files. Regression here silently inflates `column_estimate` for most
+    published PDFs.
+    """
+    import pymupdf
+
+    rng = random.Random(seed)
+    doc = pymupdf.open()
+    page = doc.new_page(width=PAGE_W, height=PAGE_H)
+
+    col_w = (PAGE_W - 2 * MARGIN - GUTTER) / 2
+    _draw_column(page, MARGIN, col_w, paragraphs(rng, 6), gap_lines)
+    _draw_column(page, MARGIN + col_w + GUTTER, col_w, paragraphs(rng, 6), gap_lines)
+
+    # Rotated, so a single text block runs the height of the page at the edge.
+    page.insert_text(
+        (PAGE_W - 14, PAGE_H - 24),
+        MARGIN_STAMP,
+        fontname=FONT,
+        fontsize=5.5,
+        rotate=90,
+    )
+    doc.save(str(path))
+    doc.close()
+
+
+def build_unknown_pdf(path: Path, pages: int = 3) -> None:
+    """A text-bearing PDF whose pages carry no usable column evidence.
+
+    Each page's text arrives as one large block, and `_column_profile` needs
+    several blocks to measure bands, so it returns None for every page and the
+    probe must answer `columns: unknown` rather than guess. That state is
+    load-bearing: it routes to the safe side (`pdf_markdown`), because guessing
+    "single column" here would send a possibly multi-column paper to a converter
+    that shreds its body text.
+    """
+    import pymupdf
+
+    body = " ".join(SENTENCES) * 6
+    doc = pymupdf.open()
+    for _ in range(pages):
+        page = doc.new_page(width=PAGE_W, height=PAGE_H)
+        page.insert_textbox(
+            pymupdf.Rect(MARGIN + 16, TOP, PAGE_W - MARGIN - 16, BOTTOM),
+            body,
+            fontname=FONT,
+            fontsize=SIZE,
+        )
     doc.save(str(path))
     doc.close()
 
@@ -276,6 +339,16 @@ def build_office_fixtures() -> list[str]:
 EXPECTED = {
     "single-column.pdf": {"columns": "single-column", "text_layer": True},
     "two-column.pdf": {"columns": "multi-column", "text_layer": True, "column_estimate": 2},
+    "two-column-watermark.pdf": {
+        "columns": "multi-column",
+        "text_layer": True,
+        "column_estimate": 2,
+    },
+    "unknown-columns.pdf": {
+        "columns": "unknown",
+        "text_layer": True,
+        "recommend": ["pdf_markdown"],
+    },
     "scanned.pdf": {"text_layer": False},
     "sample.docx": {"format": "docx"},
     "sample.xlsx": {"format": "xlsx"},
@@ -346,6 +419,8 @@ def main(argv: list[str]) -> int:
     HERE.mkdir(parents=True, exist_ok=True)
     build_pdf(HERE / "single-column.pdf", columns=1, seed=7, gap_lines=args.gap_lines)
     build_pdf(HERE / "two-column.pdf", columns=2, seed=11, gap_lines=args.gap_lines)
+    build_watermarked_pdf(HERE / "two-column-watermark.pdf", seed=23, gap_lines=args.gap_lines)
+    build_unknown_pdf(HERE / "unknown-columns.pdf")
     build_scanned(HERE / "scanned.pdf", HERE / "single-column.pdf")
     build_png(HERE / "sample.png")
     build_text_fixtures()
