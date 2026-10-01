@@ -1,0 +1,75 @@
+{
+  "name": "dsh-doc-router",
+  "version": "0.2.0",
+  "description": "DeepSeek Harness document-routing tools: sniff a file's real format and a PDF's page layout, then extract with the right pipeline — layout-aware Markdown for multi-column papers, MarkItDown for everything else, images for scans.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": {
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis",
+    "pdf",
+    "pymupdf",
+    "layout",
+    "columns",
+    "multi-column",
+    "reading-order",
+    "document-routing",
+    "docx",
+    "xlsx",
+    "markdown"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.0-rc.1 <0.3.0-0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/<your-github-user>/dsh-doc-router.git"
+  },
+  "homepage": "https://github.com/<your-github-user>/dsh-doc-router#readme",
+  "bugs": {
+    "url": "https://github.com/<your-github-user>/dsh-doc-router/issues"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-tools": ">=0.2.0-rc.1 <0.3.0-0",
+    "@deepseek-ai/schemastery": "^3.18.2"
+  },
+  "scripts": {
+    "test": "node --import ./tests/stubs/register.mjs --test \"tests/*.test.mjs\"",
+    "test:inline": "node --import ./tests/stubs/register.mjs --test-isolation=none --test \"tests/*.test.mjs\"",
+    "test:unit": "node --import ./tests/stubs/register.mjs --test \"tests/*.unit.test.mjs\"",
+    "test:unit:inline": "node --import ./tests/stubs/register.mjs --test-isolation=none --test \"tests/*.unit.test.mjs\"",
+    "test:integration": "node --import ./tests/stubs/register.mjs --test \"tests/*.integration.test.mjs\"",
+    "fixtures": "node --import ./tests/stubs/register.mjs scripts/generate-fixtures.mjs",
+    "lint": "node --check lib/index.js",
+    "verify:package": "node scripts/verify-package.mjs",
+    "pack": "npm pack",
+    "prepublishOnly": "npm test"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

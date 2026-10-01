@@ -1,0 +1,20 @@
+# Normalize text to LF in the repository regardless of the contributor's OS.
+* text=auto eol=lf
+
+# Fixtures are generated binaries; never let git touch their bytes.
+*.pdf   binary
+*.docx  binary
+*.xlsx  binary
+*.pptx  binary
+*.epub  binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+
+# Python and shell entry points.
+*.py    text eol=lf
+*.sh    text eol=lf
+*.ps1   text eol=crlf
+
+# Keep the generated-fixture diff noise out of language stats.
+tests/fixtures/* linguist-vendored

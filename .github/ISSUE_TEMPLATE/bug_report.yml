@@ -1,0 +1,99 @@
+name: Bug report
+description: A document routes wrongly, a tool fails, or the output is mangled
+title: '[bug] '
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. The single most useful thing you can include is the
+        **full `doc_route` result** for the file — it carries the per-page
+        `probe` evidence behind the verdict.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did the plugin do, and what did you expect instead?
+      placeholder: |
+        `doc_route` reported single-column for a clearly two-column paper, so
+        `pdf_markdown` was never recommended.
+    validations:
+      required: true
+
+  - type: textarea
+    id: route-output
+    attributes:
+      label: doc_route output
+      description: Paste the whole tool result, including the `probe` detail line.
+      render: text
+    validations:
+      required: false
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      description: The last line of any `doc_route` output, e.g. `dsh-doc-router v0.2.0`.
+      placeholder: 'dsh-doc-router v0.2.0'
+    validations:
+      required: true
+
+  - type: input
+    id: dsh-version
+    attributes:
+      label: DSH version
+      placeholder: '0.2.0-rc.2'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: pymupdf
+    attributes:
+      label: PyMuPDF version
+      description: Output of `python -c "import pymupdf; print(pymupdf.__doc__)"`, or "not installed".
+      placeholder: '1.28.2'
+    validations:
+      required: false
+
+  - type: input
+    id: python
+    attributes:
+      label: Interpreter the plugin resolved
+      description: From `config.pythonPath`, `DOC_ROUTER_PYTHON`, or the packaged DSH runtime.
+      placeholder: 'C:\Users\me\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe'
+    validations:
+      required: false
+
+  - type: textarea
+    id: sample
+    attributes:
+      label: A reproduction
+      description: |
+        For a misclassified PDF, a **synthetic** sample that reproduces it is ideal —
+        `tests/fixtures/generate.py` is a good starting point.
+        **Please do not attach copyrighted papers.**
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues for the same problem.
+          required: true
+        - label: I am not attaching a document I do not have the right to share.
+          required: true

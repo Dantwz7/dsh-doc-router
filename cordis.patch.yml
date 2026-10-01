@@ -1,0 +1,6 @@
+# dsh-doc-router bundle layer: inserts the document-routing tools and the
+# doc-routing skill (registered into the runtime skill layer, so it applies to
+# every workspace without a per-workspace skills/ directory).
+- insert:
+    - id: doc-router
+      name: dsh-doc-router

@@ -1,0 +1,47 @@
+name: Feature request
+description: Suggest a new format, pipeline, or routing rule
+title: '[feature] '
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to read, and where does the current routing fall short?
+      placeholder: |
+        A scanned appendix has no text layer, so the route stops at
+        "render to PNG and look at it" — there is no OCR path.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like to happen
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Routing rule (format or layout detection)
+        - A new document format
+        - pdf_markdown output quality
+        - Installation / packaging
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Project constraints
+      description: This plugin keeps routing deterministic and offline. See CONTRIBUTING.md.
+      options:
+        - label: This can be done without a model call or network access.
+          required: false
+        - label: I am aware the PDF backend (PyMuPDF) is AGPL-3.0-or-commercial.
+          required: false

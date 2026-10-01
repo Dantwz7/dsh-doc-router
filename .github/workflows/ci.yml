@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: unit · ${{ matrix.os }} · node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: ['22', '24']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Syntax check
+        run: npm run lint
+      # Deliberately no `npm install`: the suite runs against local stubs, so a
+      # bare clone must be enough. If this step ever needs an install, the
+      # stub design has been broken.
+      - name: Unit tests
+        run: npm run test:unit
+
+  integration:
+    name: integration · PyMuPDF
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PyMuPDF
+        run: pip install pymupdf4llm
+      - name: Point the plugin at the CI interpreter
+        run: echo "DOC_ROUTER_PYTHON=$(command -v python3)" >> "$GITHUB_ENV"
+      - name: Full test suite
+        run: npm test
+      - name: Fixtures still route as documented
+        run: npm run fixtures
+
+  package:
+    name: package contents
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Guards the `files` allow-list: a missing LICENSE or a shipped
+      # __pycache__ fails the build instead of reaching the registry.
+      - run: npm run verify:package
