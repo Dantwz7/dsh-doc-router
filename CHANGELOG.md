@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- README roadmap: the "publish to npm" item is now done. `dsh-doc-router@0.2.1`
+  is live on the public registry, so installation no longer needs a `file:` path.
+
 ## [0.2.1] — 2026-10-01
 
 Everything here came out of a trial run over a real corpus of 71 published PDFs

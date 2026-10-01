@@ -242,7 +242,9 @@ legal advice.
 
 ## Roadmap
 
-- [ ] Publish to npm so installation no longer needs a `file:` path.
+- [x] Publish to npm so installation no longer needs a `file:` path. — **done:
+      [`dsh-doc-router@0.2.1`](https://www.npmjs.com/package/dsh-doc-router) is
+      live on the public registry.**
 - [ ] Pluggable PDF backend, so a permissively licensed engine can replace
       PyMuPDF where AGPL is not an option.
 - [ ] TypeScript declarations for the exported surface.

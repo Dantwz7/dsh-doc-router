@@ -214,7 +214,9 @@ peer 依赖（`@deepseek-ai/dsh-tools` BSD-3-Clause；`@deepseek-ai/cordis` 与
 
 ## 路线图
 
-- [ ] 发布到 npm，让安装不再需要 `file:` 路径。
+- [x] 发布到 npm，让安装不再需要 `file:` 路径。—— **已完成：
+      [`dsh-doc-router@0.2.1`](https://www.npmjs.com/package/dsh-doc-router)
+      已上线公共 registry。**
 - [ ] PDF 后端可插拔，使 AGPL 不可接受的场景能换用宽松许可的引擎。
 - [ ] 为导出面补 TypeScript 类型声明。
 - [ ] 可选的扫描件 OCR 通路（目前止步于「渲染成 PNG 看图」）。
