@@ -41,11 +41,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/<your-github-user>/dsh-doc-router.git"
+    "url": "git+https://github.com/Dantwz7/dsh-doc-router.git"
   },
-  "homepage": "https://github.com/<your-github-user>/dsh-doc-router#readme",
+  "homepage": "https://github.com/Dantwz7/dsh-doc-router#readme",
   "bugs": {
-    "url": "https://github.com/<your-github-user>/dsh-doc-router/issues"
+    "url": "https://github.com/Dantwz7/dsh-doc-router/issues"
   },
   "dsh": {
     "bundle": {

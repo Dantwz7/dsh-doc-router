@@ -159,8 +159,8 @@ open-source project.
 - `lib/docprobe.py`, a stdlib + PyMuPDF probe that degrades instead of crashing
   when PyMuPDF is absent, and always answers in JSON.
 
-[Unreleased]: https://github.com/<your-github-user>/dsh-doc-router/compare/v0.2.1...HEAD
-[0.2.1]: https://github.com/<your-github-user>/dsh-doc-router/compare/v0.2.0...v0.2.1
-[0.2.0]: https://github.com/<your-github-user>/dsh-doc-router/compare/v0.1.1...v0.2.0
-[0.1.1]: https://github.com/<your-github-user>/dsh-doc-router/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/<your-github-user>/dsh-doc-router/releases/tag/v0.1.0
+[Unreleased]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.1.1...v0.2.0
+[0.1.1]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/Dantwz7/dsh-doc-router/releases/tag/v0.1.0

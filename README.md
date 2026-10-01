@@ -6,7 +6,7 @@ tells you which extraction pipeline it deserves — and converts multi-column PD
 with layout awareness instead of shredding them.
 
 [![npm](https://img.shields.io/npm/v/dsh-doc-router.svg)](https://www.npmjs.com/package/dsh-doc-router)
-[![CI](https://github.com/<your-github-user>/dsh-doc-router/actions/workflows/ci.yml/badge.svg)](https://github.com/<your-github-user>/dsh-doc-router/actions/workflows/ci.yml)
+[![CI](https://github.com/Dantwz7/dsh-doc-router/actions/workflows/ci.yml/badge.svg)](https://github.com/Dantwz7/dsh-doc-router/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-brightgreen.svg)](package.json)
 
@@ -199,7 +199,7 @@ ratio/column evidence. A synthetic reproduction is ideal and
 No build step and no install step. `npm test` runs on a bare clone.
 
 ```bash
-git clone https://github.com/<your-github-user>/dsh-doc-router.git
+git clone https://github.com/Dantwz7/dsh-doc-router.git
 cd dsh-doc-router
 npm test                 # unit tests run everywhere; integration tests skip without PyMuPDF
 npm run test:unit        # dependency-free

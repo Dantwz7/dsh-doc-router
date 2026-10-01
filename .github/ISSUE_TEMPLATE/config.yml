@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security issue
-    url: https://github.com/<your-github-user>/dsh-doc-router/security/advisories/new
+    url: https://github.com/Dantwz7/dsh-doc-router/security/advisories/new
     about: Please report vulnerabilities privately rather than in a public issue.
   - name: How routing works
-    url: https://github.com/<your-github-user>/dsh-doc-router#how-the-routing-works
+    url: https://github.com/Dantwz7/dsh-doc-router#how-the-routing-works
     about: The deterministic rules, and why multi-modal is not part of the normal path.

@@ -5,7 +5,7 @@
 对多栏论文做版面感知转换，而不是把正文切碎。
 
 [![npm](https://img.shields.io/npm/v/dsh-doc-router.svg)](https://www.npmjs.com/package/dsh-doc-router)
-[![CI](https://github.com/<your-github-user>/dsh-doc-router/actions/workflows/ci.yml/badge.svg)](https://github.com/<your-github-user>/dsh-doc-router/actions/workflows/ci.yml)
+[![CI](https://github.com/Dantwz7/dsh-doc-router/actions/workflows/ci.yml/badge.svg)](https://github.com/Dantwz7/dsh-doc-router/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#许可证)
 
 [English →](README.md)
@@ -175,7 +175,7 @@ Science 版面。
 **没有构建步骤，也不需要安装依赖**：裸 clone 下 `npm test` 直接可跑。
 
 ```bash
-git clone https://github.com/<your-github-user>/dsh-doc-router.git
+git clone https://github.com/Dantwz7/dsh-doc-router.git
 cd dsh-doc-router
 npm test                 # 单元测试到处都能跑；缺 PyMuPDF 时集成测试自动跳过
 npm run test:unit        # 无外部依赖

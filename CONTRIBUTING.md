@@ -33,7 +33,7 @@ JavaScript; the test suite runs against local stubs for the two
 `@deepseek-ai/*` imports, so a fresh clone needs nothing but Node.
 
 ```bash
-git clone https://github.com/<your-github-user>/dsh-doc-router.git
+git clone https://github.com/Dantwz7/dsh-doc-router.git
 cd dsh-doc-router
 npm test              # works immediately, no npm install required
 ```
