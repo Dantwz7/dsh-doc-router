@@ -45,6 +45,13 @@ TOP, BOTTOM = 64.0, 782.0
 GUTTER = 30.0
 FONT, SIZE, LEADING = "helv", 9.5, 12.0
 
+# Mirrors `MIN_BLOCK_CHARS` in `lib/docprobe.py`, which drops any text block shorter
+# than this before looking for gutters. Kept as a local copy so the fixtures stay
+# importable without docprobe; `self_check()` asserts the two still agree, so a
+# change on either side fails loudly instead of silently invalidating the fixture
+# that exists to exercise the filter.
+SHORT_BLOCK_CHARS = 25
+
 # Synthetic stand-in for the publisher stamp that runs down a PDF's page edge.
 MARGIN_STAMP = (
     "15214095, 2024, 15, Downloaded from https://example.invalid/library "
@@ -121,6 +128,136 @@ def build_pdf(path: Path, columns: int, seed: int, gap_lines: int) -> None:
         col_w = (PAGE_W - 2 * MARGIN - GUTTER) / 2
         _draw_column(page, MARGIN, col_w, paragraphs(rng, 6), gap_lines)
         _draw_column(page, MARGIN + col_w + GUTTER, col_w, paragraphs(rng, 6), gap_lines)
+
+    doc.save(str(path))
+    doc.close()
+
+
+def build_reading_order_pdf(path: Path, marker_count: int) -> None:
+    """A two-column page whose columns are *individually identifiable*.
+
+    `two-column.pdf` fills both columns from one shared sentence pool, so every
+    permutation of its sentences reads as plausibly as the correct one — it can
+    verify the column *classification*, but it cannot verify the *reading order*.
+    This fixture closes that hole: the left column carries only `L##` markers and
+    the right column only `R##`, so the correct output is exactly
+    `L01…Lnn` followed by `R01…Rnn`, and any interleaving, column swap or dropped
+    column changes the sequence.
+
+    Same geometry as `two-column.pdf` (identical margins, gutter and font), so
+    the column heuristic under test is exercised exactly as it is there.
+
+    Each marker is its own paragraph, separated by a blank line. That is not
+    cosmetic: PyMuPDF merges vertically contiguous lines into a *single* text
+    block, and `_column_profile` needs at least six blocks on the page before it
+    will report anything at all. With no inter-paragraph gap this fixture routes
+    as `unknown` — verified, which is why `gap_lines` is 1 here.
+    """
+    import pymupdf
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=PAGE_W, height=PAGE_H)
+    col_w = (PAGE_W - 2 * MARGIN - GUTTER) / 2
+    left = [f"L{i:02d} left column reading order marker." for i in range(1, marker_count + 1)]
+    right = [f"R{i:02d} right column reading order marker." for i in range(1, marker_count + 1)]
+    _draw_column(page, MARGIN, col_w, left, 1)
+    _draw_column(page, MARGIN + col_w + GUTTER, col_w, right, 1)
+
+    doc.save(str(path))
+    doc.close()
+
+
+def build_three_column_pdf(path: Path, marker_count: int) -> None:
+    """Three side-by-side columns, each individually identifiable.
+
+    Covers the branch `two-column-reading-order.pdf` cannot: `_band_columns`
+    counting **three** columns. The rule under test is "count the columns", not
+    "find the gutter down the middle" — a middle-column layout is exactly what the
+    original middle-gutter implementation missed (see the routing-history notes in
+    the README).
+
+    Two hard constraints, both enforced by the assertion below, because a third
+    column is only ~141pt wide here:
+
+    - Every marker must be **at least 25 characters**. `_column_profile` drops any
+      text block shorter than that, so a 24-character marker is invisible to the
+      column detector: the page then has only the middle column's blocks left and
+      routes as `single-column`. Verified the hard way.
+    - Every marker must fit **one line** (`width_chars`), or it wraps and the
+      paragraph takes two lines of height.
+
+    Like the two-column fixture, each marker is its own paragraph so the page has
+    the six-plus text blocks `_column_profile` requires.
+    """
+    import pymupdf
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=PAGE_W, height=PAGE_H)
+    col_w = (PAGE_W - 2 * MARGIN - 2 * GUTTER) / 3
+    width_chars = max(20, int(col_w / (0.5 * SIZE)))
+
+    for index, (tag, name) in enumerate((("L", "leftmost"), ("M", "middle"), ("R", "rightmost"))):
+        lines = [f"{tag}{i:02d} {name} column marker." for i in range(1, marker_count + 1)]
+        for line in lines:
+            assert len(line) >= 25, f"block filter would drop {line!r} ({len(line)} chars)"
+            assert len(line) <= width_chars, f"{line!r} wraps in {width_chars} chars"
+        x = MARGIN + index * (col_w + GUTTER)
+        _draw_column(page, x, col_w, lines, 1)
+
+    doc.save(str(path))
+    doc.close()
+
+
+def build_short_column_pdf(path: Path) -> None:
+    """Two columns where the **right** one is entirely short blocks.
+
+    Regression for the 25-character block filter. `_column_profile` drops every
+    text block shorter than `SHORT_BLOCK_CHARS` before it looks for gutters, and
+    that filter is column-agnostic: when one column is a figure, a table, or a list
+    of short entries, it contributes no evidence at all. The surviving column then
+    supplies more than the six blocks and eight bands the detector needs, so the
+    page looked like a **confident single-column** page and the document went to
+    `markitdown` — the one direction the asymmetric bet says must never happen.
+
+    The expected verdict is `unknown`, not `multi-column`. The detector has no
+    evidence for multi-column here, and asserting it would be a guess in the other
+    direction; what the fixture pins is the *safe* outcome — evidence incomplete,
+    so route to `pdf_markdown`.
+
+    Both halves of the premise are asserted, so a font or geometry change cannot
+    quietly turn this into an ordinary two-column fixture that tests nothing.
+    """
+    import pymupdf
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=PAGE_W, height=PAGE_H)
+    col_w = (PAGE_W - 2 * MARGIN - GUTTER) / 2
+
+    # Left column: ordinary prose, every line comfortably over the threshold.
+    left = list(SENTENCES)
+    for line in left:
+        assert len(line) >= SHORT_BLOCK_CHARS, f"kept line is too short: {line!r}"
+
+    # Right column: a figure/table-ish list, every entry under the threshold.
+    right = [
+        "Fig. 3a",
+        "Fig. 3b",
+        "Table 2",
+        "n = 41",
+        "P < .05",
+        "et al.",
+        "12.5%",
+        "see Fig. 1",
+        "20 um",
+        "RT",
+        "~3 eV",
+        "x 10^4",
+    ]
+    for line in right:
+        assert len(line) < SHORT_BLOCK_CHARS, f"dropped line would be kept: {line!r}"
+
+    _draw_column(page, MARGIN, col_w, left, 1)
+    _draw_column(page, MARGIN + col_w + GUTTER, col_w, right, 1)
 
     doc.save(str(path))
     doc.close()
@@ -339,12 +476,27 @@ def build_office_fixtures() -> list[str]:
 EXPECTED = {
     "single-column.pdf": {"columns": "single-column", "text_layer": True},
     "two-column.pdf": {"columns": "multi-column", "text_layer": True, "column_estimate": 2},
+    "two-column-reading-order.pdf": {
+        "columns": "multi-column",
+        "text_layer": True,
+        "column_estimate": 2,
+    },
+    "three-column.pdf": {
+        "columns": "multi-column",
+        "text_layer": True,
+        "column_estimate": 3,
+    },
     "two-column-watermark.pdf": {
         "columns": "multi-column",
         "text_layer": True,
         "column_estimate": 2,
     },
     "unknown-columns.pdf": {
+        "columns": "unknown",
+        "text_layer": True,
+        "recommend": ["pdf_markdown"],
+    },
+    "short-column.pdf": {
         "columns": "unknown",
         "text_layer": True,
         "recommend": ["pdf_markdown"],
@@ -365,6 +517,14 @@ def self_check() -> int:
     import docprobe  # noqa: E402  (path inserted above)
 
     failures: list[str] = []
+    # The short-block fixture is only a fixture while these two numbers agree; if
+    # docprobe's threshold moves, the right column would start being counted and the
+    # fixture would quietly stop exercising the filter it was built for.
+    if docprobe.MIN_BLOCK_CHARS != SHORT_BLOCK_CHARS:
+        failures.append(
+            f"MIN_BLOCK_CHARS drifted: docprobe has {docprobe.MIN_BLOCK_CHARS}, "
+            f"generate.py assumes {SHORT_BLOCK_CHARS} — short-column.pdf is now stale"
+        )
     for name, expected in EXPECTED.items():
         path = HERE / name
         if not path.exists():
@@ -419,6 +579,9 @@ def main(argv: list[str]) -> int:
     HERE.mkdir(parents=True, exist_ok=True)
     build_pdf(HERE / "single-column.pdf", columns=1, seed=7, gap_lines=args.gap_lines)
     build_pdf(HERE / "two-column.pdf", columns=2, seed=11, gap_lines=args.gap_lines)
+    build_reading_order_pdf(HERE / "two-column-reading-order.pdf", marker_count=15)
+    build_three_column_pdf(HERE / "three-column.pdf", marker_count=15)
+    build_short_column_pdf(HERE / "short-column.pdf")
     build_watermarked_pdf(HERE / "two-column-watermark.pdf", seed=23, gap_lines=args.gap_lines)
     build_unknown_pdf(HERE / "unknown-columns.pdf")
     build_scanned(HERE / "scanned.pdf", HERE / "single-column.pdf")

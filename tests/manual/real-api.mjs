@@ -60,7 +60,23 @@ try {
     } catch (error) {
         say(`Config({})     : THREW -> ${error.message}`);
         failed = true;
-        config = { timeoutMs: 120_000, maxChars: 120_000 };
+        config = { timeoutMs: 120_000, maxChars: 120_000, noteLanguage: 'zh' };
+    }
+
+    // 1b. Does the real schemastery enforce the noteLanguage enum? The stub used
+    //     by the unit tests models defaults only, so this is the only place the
+    //     enum itself is checked. Either behaviour is safe — the probe falls back
+    //     to the default language for an unrecognised --lang — but a value that
+    //     slips through should not silently change what a user sees, so record
+    //     which one the real library does.
+    say(`noteLanguage   : default -> ${JSON.stringify(config.noteLanguage)}`);
+    for (const probe of ['en', 'klingon']) {
+        try {
+            const out = plugin.Config({ noteLanguage: probe });
+            say(`noteLanguage   : ${probe.padEnd(8)} -> accepted as ${JSON.stringify(out.noteLanguage)}`);
+        } catch (error) {
+            say(`noteLanguage   : ${probe.padEnd(8)} -> rejected (${error.message.split('\n')[0]})`);
+        }
     }
 
     // 2. Does the real defineTool accept both tool definitions?

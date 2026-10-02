@@ -27,7 +27,17 @@ console.error(`[fixtures] using interpreter: ${python}`);
 
 const child = spawn(python, [script, ...process.argv.slice(2)], {
     stdio: 'inherit',
-    env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' },
+    // PYTHONDONTWRITEBYTECODE: `generate.py` sets `sys.dont_write_bytecode` itself,
+    // but a module's own flag cannot stop *its own* `.pyc` — the bytecode is written
+    // when the module is compiled, before its body runs. The flag therefore has to
+    // come from the runner. It is harmless here (a script run directly is never
+    // cached) and load-bearing for anything that *imports* the fixture module.
+    env: {
+        ...process.env,
+        PYTHONIOENCODING: 'utf-8',
+        PYTHONUTF8: '1',
+        PYTHONDONTWRITEBYTECODE: '1',
+    },
 });
 
 child.on('error', (error) => {

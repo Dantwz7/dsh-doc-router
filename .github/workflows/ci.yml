@@ -66,3 +66,16 @@ jobs:
       # Guards the `files` allow-list: a missing LICENSE or a shipped
       # __pycache__ fails the build instead of reaching the registry.
       - run: npm run verify:package
+
+  docs:
+    name: docs links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Renaming a README heading silently rots every anchor that points at it —
+      # including `.github/ISSUE_TEMPLATE/config.yml`. This check makes that fail
+      # here instead of in a user's browser.
+      - run: npm run verify:docs

@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import {
+    assertNotShredded,
     defaultConfig,
     fixture,
     fixturesDir,
@@ -115,8 +116,27 @@ test('pdf_markdown converts a two-column page with both columns intact', { skip 
     assert.equal(result.pagesUsed, 'pages 1');
     const flat = result.markdown.replace(/\s+/g, ' ');
     assert.match(flat, /Document routing decides/);
+    // NOTE: both substrings come from the fixture's single shared sentence pool,
+    // so this asserts that both columns' text survived — not that it is in the
+    // right order. Reading order is asserted by the marker fixture below.
     assert.match(flat, /gutter between columns/);
+    // "both columns intact" also means the output is still prose, not a table.
+    assertNotShredded(assert, result.markdown, { label: 'pdf_markdown tool output' });
     assert.equal(result.outputPath, undefined);
+});
+
+test('pdf_markdown preserves column reading order through the tool layer', { skip }, async () => {
+    const tool = toolNamed(pluginForTests(), 'pdf_markdown');
+    const result = await tool.execute(
+        { path: fixture('two-column-reading-order.pdf') },
+        makeExec(),
+    );
+
+    const markers = result.markdown.match(/\b[LR]\d{2}\b/g) ?? [];
+    const left = markers.filter((m) => m.startsWith('L'));
+    const right = markers.filter((m) => m.startsWith('R'));
+    assert.ok(left.length >= 10 && right.length >= 10, `got ${markers.length} markers`);
+    assert.deepEqual(markers, [...left, ...right], `reading order broken: ${markers.join(' ')}`);
 });
 
 test('pdf_markdown writes to disk and withholds the inline body', { skip }, async () => {

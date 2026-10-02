@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { fixture, probeInterpreter, runProbe } from './helpers.mjs';
+import { assertNotShredded, fixture, probeInterpreter, runProbe } from './helpers.mjs';
 
 const interpreter = probeInterpreter();
 
@@ -24,6 +24,39 @@ function probe(args) {
     assert.equal(typeof parsed, 'object');
     assert.notEqual(parsed, null);
     return { parsed, status: result.status, stderr: result.stderr ?? '' };
+}
+
+/**
+ * Assert that `markdown` reads `tags.length` columns in order: every marker of
+ * column 0, then column 1, and so on, each column internally ascending.
+ *
+ * This is the assertion that makes the marker fixtures worth having. A fixture
+ * whose columns share a sentence pool cannot fail on a wrong order; one with
+ * `L##` / `M##` / `R##` markers fails on an interleaved result, a swapped pair of
+ * columns, a dropped column, or a reordered column.
+ */
+function assertColumnReadingOrder(markdown, tags, minPerColumn = 10) {
+    const pattern = new RegExp(`\\b[${tags.join('')}]\\d{2}\\b`, 'g');
+    const markers = markdown.match(pattern) ?? [];
+    const columns = tags.map((tag) => markers.filter((m) => m.startsWith(tag)));
+
+    for (const [i, column] of columns.entries()) {
+        assert.ok(
+            column.length >= minPerColumn,
+            `expected >=${minPerColumn} markers in column ${tags[i]}, got ${column.length}` +
+                ` (all markers: ${markers.join(' ') || 'none'})`,
+        );
+        assert.deepEqual(
+            column,
+            column.map((_, n) => `${tags[i]}${String(n + 1).padStart(2, '0')}`),
+            `column ${tags[i]} is out of order: ${column.join(' ')}`,
+        );
+    }
+    assert.deepEqual(
+        markers,
+        columns.flat(),
+        `columns are interleaved or swapped: ${markers.join(' ')}`,
+    );
 }
 
 test('route classifies every fixture as documented', { skip: !interpreter.available && interpreter.reason }, async (t) => {
@@ -48,10 +81,34 @@ test('route classifies every fixture as documented', { skip: !interpreter.availa
             recommend: ['pdf_markdown'],
         },
         {
+            // Covers the branch the watermark case only guards by accident: a
+            // layout that genuinely HAS three columns. The original
+            // implementation looked for a single gutter down the middle of the
+            // page, so a middle column of body text was invisible to it.
+            file: 'three-column.pdf',
+            format: 'pdf',
+            columns: 'multi-column',
+            column_estimate: 3,
+            text_layer: true,
+            recommend: ['pdf_markdown'],
+        },
+        {
             // Text present, but in one block per page: no column evidence at
             // all. Must stay `unknown` and go to the safe side, never be
             // asserted to be single-column.
             file: 'unknown-columns.pdf',
+            format: 'pdf',
+            columns: 'unknown',
+            column_estimate: null,
+            text_layer: true,
+            recommend: ['pdf_markdown'],
+        },
+        {
+            // Two real columns, but the right one is entirely short blocks (a
+            // figure/table list), so the 25-character filter discards it. The
+            // surviving column used to look like a confident single-column page,
+            // which routed the document to markitdown. Must be `unknown`.
+            file: 'short-column.pdf',
             format: 'pdf',
             columns: 'unknown',
             column_estimate: null,
@@ -133,9 +190,34 @@ test('markdown converts a two-column page without shredding the text', { skip: !
     // Whitespace-normalise first: a line wrap inside the phrase is not a defect.
     const flat = parsed.markdown.replace(/\s+/g, ' ');
     assert.match(flat, /Document routing decides/);
-    // Both columns must be present — the failure mode this plugin exists to
-    // prevent is one column being dropped or interleaved.
+    // Both columns' text must survive. NOTE: this fixture cannot detect a wrong
+    // *order* — both of its columns are drawn from one shared sentence pool, so
+    // every permutation reads as plausibly as the correct one. Reading order is
+    // covered by the marker fixtures below.
     assert.match(flat, /gutter between columns/);
+
+    // "without shredding" is in this test's name, so assert it rather than assume
+    // it: the shredding failure mode is the text coming back as a markdown table.
+    assertNotShredded(assert, parsed.markdown, { label: 'pdf_markdown output' });
+});
+
+test('markdown keeps left-to-right reading order across two columns', { skip: !interpreter.available && interpreter.reason }, async () => {
+    // The failure this plugin exists to prevent is a naive converter interleaving
+    // (or dropping) the columns of a paper. `two-column.pdf` cannot detect that:
+    // its columns share one sentence pool. This fixture's columns do not — the
+    // left carries only `L##` and the right only `R##`.
+    const { parsed } = probe(['markdown', fixture('two-column-reading-order.pdf')]);
+    assert.equal(parsed.error, undefined);
+    assertColumnReadingOrder(parsed.markdown, ['L', 'R']);
+});
+
+test('markdown keeps reading order across three columns', { skip: !interpreter.available && interpreter.reason }, async () => {
+    // Two columns can be served by "find the gutter down the middle"; three
+    // cannot. A middle column of body text is exactly what that implementation
+    // missed, so assert the whole L → M → R sequence, not just the extremes.
+    const { parsed } = probe(['markdown', fixture('three-column.pdf')]);
+    assert.equal(parsed.error, undefined);
+    assertColumnReadingOrder(parsed.markdown, ['L', 'M', 'R']);
 });
 
 test('markdown honours a page selection and defaults to the whole document', { skip: !interpreter.available && interpreter.reason }, async () => {
@@ -189,6 +271,56 @@ test('an undecidable layout is routed to the safe side, not asserted to be singl
     const notes = parsed.notes.join(' ');
     assert.match(notes, /未能判定栏数/);
     assert.doesNotMatch(notes, /单栏/, 'must not claim a single column it never measured');
+});
+
+test('a column made entirely of short blocks is not reported as single-column', { skip: !interpreter.available && interpreter.reason }, async () => {
+    // Regression for the 25-character block filter. `_column_profile` discards
+    // short blocks before looking for gutters, and that filter is column-agnostic:
+    // with the right-hand column reduced to "Fig. 3a", "Table 2" and friends it
+    // contributed no evidence, the left column supplied all of it, and the page was
+    // reported `single-column` — sending a genuinely two-column document to
+    // markitdown, the one direction the asymmetric bet forbids.
+    //
+    // The verdict is `unknown`, not `multi-column`: the detector still has no
+    // evidence for a second column, and claiming one would be a guess in the other
+    // direction. The fix only refuses to overstate.
+    const { parsed } = probe(['route', fixture('short-column.pdf')]);
+    assert.notEqual(
+        parsed.columns,
+        'single-column',
+        'short blocks must not hide a whole column',
+    );
+    assert.equal(parsed.columns, 'unknown');
+    assert.equal(parsed.column_estimate, null);
+    assert.deepEqual(parsed.recommend, ['pdf_markdown']);
+    assert.equal(parsed.text_layer, true, 'a text layer exists; this is not a scan');
+});
+
+test('advisory notes are available in English too', { skip: !interpreter.available && interpreter.reason }, async () => {
+    // The npm README is English, and the notes travel with the tool result, so the
+    // English README used to have to print "[2 advisory lines omitted]" over output
+    // this package emits itself. `--lang en` removes that.
+    const { parsed } = probe(['route', fixture('unknown-columns.pdf'), '--lang', 'en']);
+    assert.equal(parsed.columns, 'unknown', 'the verdict itself is language-independent');
+    assert.deepEqual(parsed.recommend, ['pdf_markdown']);
+    const notes = parsed.notes.join(' ');
+    assert.match(notes, /could not be determined/);
+    // The same invariant as the Chinese note, in the other language: never claim a
+    // single column that was never measured.
+    assert.doesNotMatch(
+        notes,
+        /single column/i,
+        'must not claim a single column it never measured',
+    );
+    assert.doesNotMatch(notes, /[\u4e00-\u9fff]/, 'no Chinese left in the English notes');
+});
+
+test('an unknown --lang falls back to the default instead of failing', { skip: !interpreter.available && interpreter.reason }, async () => {
+    const { parsed, status } = probe(['route', fixture('unknown-columns.pdf'), '--lang', 'klingon']);
+    assert.equal(status, 0);
+    assert.equal(parsed.error, undefined);
+    assert.equal(parsed.columns, 'unknown');
+    assert.match(parsed.notes.join(' '), /未能判定栏数/, 'falls back to the default language');
 });
 
 test('a margin stamp is not counted as a column', { skip: !interpreter.available && interpreter.reason }, async () => {

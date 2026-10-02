@@ -25,6 +25,19 @@ test('Config applies the documented defaults and leaves pythonPath unset', async
     assert.equal(config.timeoutMs, 120_000);
     assert.equal(config.maxChars, 120_000);
     assert.equal(config.pythonPath, undefined);
+    // Chinese keeps the behaviour that existed before this option was added.
+    assert.equal(config.noteLanguage, 'zh');
+});
+
+test('Config accepts noteLanguage en alongside the zh default', async () => {
+    const config = loadPlugin().plugin.Config({ noteLanguage: 'en' });
+    assert.equal(config.noteLanguage, 'en');
+    // Rejecting an out-of-range value is the real schemastery's job, and this
+    // suite's stub deliberately does not model validation (see
+    // tests/stubs/schemastery.mjs). It is checked against the real library in
+    // tests/manual/real-api.mjs, and degrades safely regardless: the probe falls
+    // back to the default language for an unrecognised --lang, which
+    // `an unknown --lang falls back to the default instead of failing` asserts.
 });
 
 test('apply registers exactly the two tools and the runtime skill', async () => {

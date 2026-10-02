@@ -10,7 +10,8 @@
  * Usage: node scripts/verify-package.mjs
  */
 import { spawnSync } from 'node:child_process';
-import { dirname } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -47,6 +48,31 @@ const FORBIDDEN_PATTERNS = [
     [/\.test\.mjs$/, 'test file'],
     [/\.log$/, 'log file'],
 ];
+
+/**
+ * `scripts` entries that reference development-only paths, and therefore cannot
+ * run from the published tarball.
+ *
+ * This is not a defect to fix — `tests/` and `scripts/` are excluded above on
+ * purpose, and no consumer runs `npm test` on an installed plugin. It is a
+ * *deliberate* inconsistency that would otherwise rot silently: `package.json` is
+ * shipped verbatim, so it keeps advertising entry points whose files are not.
+ *
+ * Enumerating them turns that into an invariant. A new script that touches a
+ * forbidden prefix without being listed here fails the check, and a listed script
+ * that no longer does fails too (no stale entries). Adding one should be a
+ * conscious "yes, this is development-only".
+ */
+const DEV_ONLY_SCRIPTS = new Set([
+    'test',
+    'test:inline',
+    'test:unit',
+    'test:unit:inline',
+    'test:integration',
+    'fixtures',
+    'verify:package',
+    'verify:docs',
+]);
 
 const npmCli = process.env.npm_execpath;
 const result = spawnSync(
@@ -111,6 +137,32 @@ if (entry.size > LIMIT_BYTES) {
     problems.push(
         `tarball is ${entry.size} bytes, over the ${LIMIT_BYTES}-byte budget — check for stray files`,
     );
+}
+
+// The manifest is shipped verbatim, so its scripts still name files the tarball
+// does not contain. Assert that every such script is a declared exception.
+const manifest = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
+const scriptNames = Object.keys(manifest.scripts ?? {});
+const touchesDevOnly = (name) =>
+    FORBIDDEN.some((prefix) => (manifest.scripts[name] ?? '').includes(prefix));
+
+for (const name of scriptNames) {
+    if (touchesDevOnly(name) && !DEV_ONLY_SCRIPTS.has(name)) {
+        problems.push(
+            `script "${name}" runs a development-only path but is not listed in ` +
+                'DEV_ONLY_SCRIPTS — add it there if that is intended',
+        );
+    }
+}
+for (const name of DEV_ONLY_SCRIPTS) {
+    if (!scriptNames.includes(name)) {
+        problems.push(`DEV_ONLY_SCRIPTS lists "${name}", which package.json no longer defines`);
+    } else if (!touchesDevOnly(name)) {
+        problems.push(
+            `script "${name}" is listed in DEV_ONLY_SCRIPTS but no longer references a ` +
+                'development-only path — remove it from the list',
+        );
+    }
 }
 
 console.log(`${entry.filename}: ${files.length} files, ${entry.size} bytes (unpacked ${entry.unpackedSize})`);

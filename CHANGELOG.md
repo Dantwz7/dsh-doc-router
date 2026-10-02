@@ -5,12 +5,195 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] — 2026-10-02
+
+This release closes the project's largest **evidence** gap. The suite could not detect a
+wrong reading order, two tests claimed a property they never asserted, and the corpus
+numbers behind the thresholds were recorded rather than re-runnable. All three are fixed,
+and every new assertion was verified to fail on a mutated input before it was trusted.
+
+One user-facing addition — `noteLanguage` — and one user-facing fix: the column detector
+could report a two-column page as a confident **single column** when one of its columns
+was made entirely of short blocks, which routed it to the unsafe pipeline.
+
+### Added
+
+- **`tests/fixtures/two-column-reading-order.pdf`, and the tests that use it.**
+  This closes a real coverage hole: the suite could not detect a wrong reading
+  order. Both existing two-column tests asserted only that two substrings from
+  `two-column.pdf`'s single shared sentence pool were present, so they passed on
+  an interleaved result, a swapped pair of columns, or a truncated one. The new
+  fixture's columns are individually identifiable (`L01…L15` | `R01…R15`), and
+  `probe.integration.test.mjs` + `tools.integration.test.mjs` now assert the exact
+  sequence. Verified to fail on all six mutations tested: row-interleaved,
+  swapped, dropped, reversed, and marker-split.
+- **`tests/fixtures/three-column.pdf`**, covering the branch the watermark fixture
+  only guarded by accident: a layout that genuinely has **three** columns. Two
+  columns can be served by "find the gutter down the middle"; three cannot, and a
+  middle column of body text is exactly what that implementation missed. The route
+  table asserts est **3** and the reading order is asserted as `L → M → R`
+  (`L01…L15` | `M01…M15` | `R01…R15`). The shared
+  `assertColumnReadingOrder()` helper now backs both column-count cases, and was
+  verified to discriminate on 12 mutations across two- and three-column inputs.
+- **`tests/fixtures/short-column.pdf`**, the regression fixture for the short-block
+  fix below. Two real columns, but the right-hand one is entirely short blocks
+  (a figure/table list), so the 25-character filter discards it. Verified to
+  discriminate: the pre-fix implementation reports `single-column` and routes to
+  `markitdown`; the current one reports `unknown` and routes to `pdf_markdown`.
+  Both halves of the premise are asserted in `generate.py`, and `self_check()`
+  asserts its `SHORT_BLOCK_CHARS` still equals `docprobe.MIN_BLOCK_CHARS`, so the
+  fixture cannot silently decay into a second copy of the two-column case.
+- `scripts/check-doc-links.mjs` (`npm run verify:docs`), wired into CI as a `docs`
+  job. Renaming a README heading silently rots every anchor that points at it —
+  including `.github/ISSUE_TEMPLATE/config.yml`, which links `#how-the-routing-works`
+  — so that now fails in CI instead of in a user's browser.
+- **`noteLanguage` config option (`'zh'` default, or `'en'`)**, selecting the
+  language of `doc_route`'s advisory notes. The verdict, `recommend` and `probe`
+  fields stay language-neutral. `zh` is the default so existing installs print
+  exactly what they did before. Both languages are asserted, including that the
+  English note never claims a single column it did not measure. The real
+  schemastery enforces the enum (`$.noteLanguage expected "zh" | "en"`), verified
+  against `app.asar` in `tests/manual/real-api.mjs` — the stub-based unit suite
+  models defaults only, by design.
+- **`assertNotShredded()` in `tests/helpers.mjs`**, so the two tests named
+  "without shredding" and "both columns intact" actually assert it. They previously
+  checked only that two substrings survived, which an interleaved or table-shredded
+  result would also satisfy. The new assertion rejects markdown table rows and
+  fragmentation (measured: `pdf_markdown` 283 chars/non-blank line and 0 table rows,
+  MarkItDown 43 and 24 on the same fixture) and was verified to pass real
+  `pdf_markdown` output while failing MarkItDown's.
 
 ### Changed
 
-- README roadmap: the "publish to npm" item is now done. `dsh-doc-router@0.2.1`
-  is live on the public registry, so installation no longer needs a `file:` path.
+- **Both READMEs restructured** after a survey of eleven real repositories (three
+  comparable document tools, two DSH plugins, eight high-star projects). The
+  verdict-first layout is unchanged; what is new is a jump-to row, a requirements
+  table under Install, per-parameter output examples, a fixture-derived verdict
+  table, and the deeper design notes folded into `<details>`.
+- The configuration snippet now shows the real `insert:` wrapper from
+  `cordis.patch.yml` instead of a fragment that could not be pasted anywhere.
+- **`scripts/verify-package.mjs` now enforces the `files`/`scripts` split.** The
+  manifest is shipped verbatim, but `files` excludes `tests/` and `scripts/`, so
+  `npm test` and friends name entry points the tarball does not contain. That is
+  deliberate — no consumer runs them — but it was latent rather than stated.
+  `DEV_ONLY_SCRIPTS` now enumerates the exceptions, and the verifier fails both on
+  a script that touches a development-only path without being listed and on a
+  listed script that no longer does (no stale entries). Verified to fail on an
+  injected violation.
+- **The Install section now documents the `dsh plugin --profile` path**, including
+  the two ways it surprises you. Both were found by running it, not by reading it:
+  `--profile <unknown-name>` does not fail — it **initializes a new, empty profile**
+  and installs there, so the plugin never reaches the profile DSH boots; and
+  `dsh plugin --profile <name> --help` is not a dry run, because it initializes the
+  profile before printing pnpm's help. On this machine the active profile is
+  `desktop`, so following the command as originally written would have installed
+  into an empty `web` profile instead.
+- The licence, contributing and acknowledgement sections are now separate, and the
+  READMEs are section-for-section aligned (the Chinese one was missing the `node`
+  badge).
+
+### Fixed
+
+- **The 25-character block filter could hide a whole column and route the page to
+  the unsafe side.** Building the three-column fixture surfaced this: when one
+  column of a two-column page consists only of short blocks — a figure, a table, a
+  list of short entries — that column contributes no evidence, the other column
+  supplies more than the six blocks and eight bands the detector needs, and the page
+  is reported `single-column`. It does not stop at `unknown`, so the document went
+  to `markitdown`: the unsafe direction the asymmetric bet exists to prevent.
+  Reproduced with a synthetic two-column page.
+
+  `_column_profile` now checks whether the discarded short blocks lie outside the
+  surviving text span (a gap of at least `max(6pt, 1.2% of page width)`) and, if so,
+  reports **`unknown`** instead of `single-column`. This is a **safe-side-only**
+  change: it never asserts multi-column from discarded evidence — that would be a
+  guess in the other direction, with no evidence either way.
+
+  Validated against the real 71-PDF trial corpus (read-only) with the pre-fix and
+  post-fix implementations run over every file:
+
+  | Measure | Result |
+  |---|---|
+  | Document verdicts changed | **0 of 71** |
+  | Multi-column → not-multi-column (missed detections) | **0** |
+  | Page-level profiles changed | **0** |
+  | Verdict distribution, before and after | identical: 47 multi / 22 single / 2 unknown |
+
+  An earlier draft of the fix triggered on 2 real pages, both the publisher's
+  margin timestamp (`'01 October 2026 09:08:07'` at x=596 on a 612pt page) — that
+  is the noise the filter exists to drop, not a column. Excluding the outer 5% of
+  the page removed both false triggers, leaving the corpus untouched. The fix
+  therefore costs nothing on the corpus that tuned the thresholds, and the defect
+  remains real but has **no observed instance in this corpus**.
+- **Documentation: the probe's advisory notes were Chinese-only.** They are now
+  available in English via `noteLanguage: 'en'`; the English README prints the real
+  output instead of eliding it, and localization is no longer a roadmap item.
+- **Documentation: the validation section was stale.** It claimed "ten real PDFs".
+  The actual corpus trial was 71 PDFs plus one DOCX, with the per-class results and
+  the two `0.2.1` regressions now recorded.
+- **Documentation: the motivating comparison is not reproducible.** The synthetic
+  fixtures verify *classification*, not reading order — on `two-column.pdf`,
+  `pdf_markdown` and MarkItDown return the identical 48-sentence sequence, because
+  both columns are drawn from one shared sentence pool. Both READMEs now say so
+  rather than implying the fixture proves the conversion claim.
+- **A stray `tests/fixtures/__pycache__/` inside the repository.** `generate.py` set
+  `sys.dont_write_bytecode = True` in its own body, which cannot prevent *its own*
+  `.pyc`: Python compiles the module before running it, so only the importing
+  process can suppress that. Importing it from `_verify/` therefore left a
+  `__pycache__` next to the fixtures. Both places that spawn Python
+  (`tests/helpers.mjs`, `scripts/generate-fixtures.mjs`) now set
+  `PYTHONDONTWRITEBYTECODE=1`, and the `_verify/` scripts share a single
+  `_bootstrap` entry point instead of repeating the flag. The existing stale
+  directory was deleted. Note this was never a *shipping* bug — `.gitignore` and
+  `verify:package` both already refused it — only working-tree noise.
+
+### Notes
+
+- **The marker fixtures reproduce MarkItDown's interleaving**, so the project's
+  central claim is now clone-and-check reproducible. Measured with markitdown
+  0.1.5 / pdfminer.six 20260107:
+
+  | Fixture | `pdf_markdown` | MarkItDown |
+  |---|---|---|
+  | `two-column-reading-order.pdf` | `L01…L15 R01…R15` | `L01 R01 L02 R02 …` — **29 alternations** |
+  | `three-column.pdf` | `L01…L15 M01…M15 R01…R15` | `L01 M01 R01 L02 …` — **44 alternations** |
+
+  The suite cannot assert this — MarkItDown is not a test dependency — so the
+  measurement is recorded in `tests/fixtures/README.md`.
+- **An earlier conclusion is overturned, with its cause.** The same markers drawn
+  as one contiguous run with no paragraph gaps read back *correctly* through
+  MarkItDown, which briefly suggested the failure was not reproducible with
+  synthetic layouts. That was an artefact of the layout: PyMuPDF merges
+  contiguous lines into one text block per column, and pdfminer kept those two
+  blocks in order. Real paragraph structure — which the column detector needs
+  anyway — is what makes the fixture discriminate.
+- Fixture design constraint: `_column_profile` reports nothing until a page has
+  six text blocks, so the blank line between markers is load-bearing. Drawn
+  contiguously, the fixture routes as `unknown`, not `multi-column`.
+- Fixture design constraint: `_column_profile` also **drops any text block shorter
+  than 25 characters**. A three-column fixture first built with 24-character
+  `L`/`R` markers therefore lost two of its three columns and routed as
+  `single-column`. Both this and the six-block rule are now enforced by assertions
+  inside `generate.py`, so a geometry change fails loudly instead of quietly
+  producing a fixture that tests nothing.
+- **A three-column layout is not hypothetical.** The single `est 3` file in the
+  71-PDF corpus is a Science research article whose body text is three equal
+  164pt columns (`[37,201] [215,379] [393,557]`, stable across ~30 bands), with the
+  abstract spanning the first two. It was confirmed by eye against a rendered page,
+  so the corpus figure "column-count over-estimates: 18 → fixed" still holds: this
+  one is a correct estimate, not a residual over-estimate.
+- The corpus verdict counts in the READMEs (47 / 22 / 2) were **re-measured** from
+  the corpus rather than carried over, by running the probe over all 71 files.
+- **The evidence behind the corpus numbers is now navigable and re-runnable.**
+  `_verify/` held 100-odd scratch scripts with no index; it now has a `README.md`
+  that groups them by investigation with a one-line purpose each, and documents the
+  `python -B` / `_bootstrap` bytecode rule. `validate_routing.py` — written when the
+  probe lived at `tools/docroute.py`, and broken by the move to `lib/` — was
+  repaired and now reproduces the corpus baseline in one command: 71 PDFs →
+  **47 / 22 / 2**. `--json` writes a per-file manifest (path, size, pages, verdict,
+  estimate, chars/page), so the totals can be **diffed** rather than believed.
+  `check_science.py` was repaired the same way, and now selects the article rather
+  than its supporting information.
 
 ## [0.2.1] — 2026-10-01
 
@@ -164,7 +347,8 @@ open-source project.
 - `lib/docprobe.py`, a stdlib + PyMuPDF probe that degrades instead of crashing
   when PyMuPDF is absent, and always answers in JSON.
 
-[Unreleased]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.1.0...v0.1.1

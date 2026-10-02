@@ -22,7 +22,10 @@ fixtures that no longer test what they claim.
 | File | Branch it exercises |
 |---|---|
 | `two-column.pdf` | Real two-column geometry → `columns: multi-column`, est 2 → `pdf_markdown` |
+| `two-column-reading-order.pdf` | Two columns with **individually identifiable** content → the conversion's *reading order* |
+| `three-column.pdf` | Three columns → est **3**; the middle-column layout a middle-gutter heuristic misses |
 | `two-column-watermark.pdf` | Two columns plus a full-height ~7pt margin stamp → still est **2**, not 3 |
+| `short-column.pdf` | Two columns, the right one entirely short blocks → `columns: unknown`, **not** `single-column` |
 | `unknown-columns.pdf` | Text present but one block per page → `columns: unknown` → `pdf_markdown` (safe side) |
 | `single-column.pdf` | One text box → `columns: single-column` → `markitdown` / `pypdf` |
 | `scanned.pdf` | JPEG-only page, zero text layer → `render_to_png + read_image` |
@@ -34,6 +37,81 @@ fixtures that no longer test what they claim.
 | `sample.csv` / `.json` / `.html` / `.txt` | Text-ish containers, extension-mapped |
 | `magic-ole2.doc` | OLE2 header (legacy binary Office) → `ole2` |
 | `magic-plain.zip` | ZIP without any Office part → `zip` |
+
+## The marker fixtures (`*-reading-order`, `three-column`)
+
+`two-column.pdf` fills both columns from **one shared sentence pool**. That is
+enough to test the *classifier* — but it cannot test the *conversion*, because
+every permutation of those sentences reads as plausibly as the correct one. On
+this fixture `pdf_markdown` and MarkItDown return the **identical sentence
+sequence**; the only difference is line wrapping. An assertion on it can
+therefore pass even when the columns are interleaved.
+
+The marker fixtures fix that. Their columns carry only `L##` (and `M##`, `R##` for
+three columns), so the correct output is unambiguous — and
+`tests/probe.integration.test.mjs` asserts it, which fails on an interleaved,
+swapped, reordered or dropped column.
+
+Three constraints are load-bearing. All are enforced by assertions inside
+`generate.py`, so changing the geometry fails loudly instead of quietly producing
+a fixture that no longer tests anything:
+
+- **Markers need paragraph gaps.** PyMuPDF merges vertically contiguous lines into
+  a single text block, and `_column_profile` reports nothing at all until it has
+  six blocks. Drawn as one contiguous run, these fixtures route as `unknown`.
+- **Every marker must be at least 25 characters.** `_column_profile` drops any text
+  block shorter than that, so a 24-character marker is invisible to the column
+  detector. A three-column fixture built with 24-character `L`/`R` markers had
+  only its middle column's blocks left and routed as `single-column` — verified
+  the hard way.
+- **A marker must fit one line** in its column. A third column is only ~141pt
+  wide, so the three-column markers are deliberately short.
+
+### `two-column-reading-order.pdf` reproduces MarkItDown's interleaving
+
+With markitdown 0.1.5 / pdfminer.six 20260107 this fixture comes back as
+`L01 R01 L02 R02 …` — **29 column alternations** — while `pdf_markdown` returns
+`L01…L15 R01…R15`. So this is the repository's clearest, clone-and-check
+demonstration of the problem the plugin exists to solve. The test suite cannot
+assert it (MarkItDown is not a test dependency, and a test that needs `uvx` would
+not run on a bare clone), so it is recorded here instead.
+
+An earlier attempt drew the markers as one contiguous run with no paragraph gaps.
+That variant read back **correctly** through MarkItDown: PyMuPDF merged each
+column into a single text block and pdfminer kept those two blocks in order. The
+interleaving only appears once the page has real paragraph structure — which is
+also what the column detector needs. Do not "simplify" the gaps away: they are
+what makes this fixture discriminate.
+
+## `short-column.pdf`: the 25-character filter can hide a whole column
+
+`_column_profile` discards every text block shorter than 25 characters before it
+looks for gutters, and that filter is **column-agnostic**. On this fixture the
+right-hand column is a figure/table-ish list (`Fig. 3a`, `Table 2`, `n = 41`, …),
+so the filter throws all of it away; the left column then supplies more than the
+six blocks and eight bands the detector needs, and the page looked like a
+**confident single-column** page. It did not stop at `unknown`, so the document was
+routed to `markitdown` — the one direction the asymmetric bet says must never
+happen.
+
+The expected verdict is `unknown`, **not** `multi-column`. The detector genuinely
+has no evidence of a second column; asserting one would be a guess in the other
+direction. What the fix does is refuse to overstate.
+
+Measured on this fixture (`_verify/prove-short-column-fixture.py`):
+
+| | pre-fix | post-fix |
+|---|---|---|
+| Blocks | 22 total — 11 kept, 11 dropped | same |
+| Kept / dropped x-span | `[56, 261]` / `[312, 354]` | same |
+| Verdict | `single-column` | `unknown` |
+| Routes to | `markitdown` (**unsafe**) | `pdf_markdown` |
+
+Both halves of the premise are asserted in `generate.py` — every left-hand line is
+at least 25 characters, every right-hand line under it — and `self_check()` asserts
+that `generate.py`'s `SHORT_BLOCK_CHARS` still equals `docprobe.MIN_BLOCK_CHARS`. If
+the threshold moves, regeneration fails instead of quietly turning this into an
+ordinary two-column fixture.
 
 ## A note on the `magic-*` fixtures
 
