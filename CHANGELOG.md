@@ -5,6 +5,60 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-10-03
+
+A threshold-unit release. The block filter that decides which text blocks may vote on
+a page's column count now measures **content** instead of **codepoints**, so dense
+scripts stop being over-filtered. Latin text is bit-for-bit unchanged: **0 of 71**
+corpus verdicts moved.
+
+### Changed
+
+- **`MIN_BLOCK_CHARS` is now counted in *latin-equivalent* codepoints, not raw ones.**
+  The threshold is a *content* threshold — "about half a line of body text" — but it
+  was compared against `len(text)`, and that is not the same amount of text in every
+  script: a Chinese word is 1–2 ideographs where an English word is ~5 letters, so
+  the filter was several times more aggressive on Chinese PDFs and discarded real
+  body text. When what it discarded was a whole column, the page lost every trace of
+  that column and fell back to `unknown`. `_block_weight` now counts an ideograph
+  (CJK Unified Ideographs including extension A and the compatibility block, kana,
+  Hangul syllables) as `CJK_CHAR_WEIGHT = 2`. Pure-ASCII blocks still take the
+  `len()` fast path, so the Latin path is unchanged by construction.
+
+### Added
+
+- **`tests/fixtures/dense-script-column.pdf`**, a controlled comparison against
+  `short-column.pdf`: identical geometry and identical left column, but the short
+  right column is Chinese instead of Latin. Pre-fix that column is discarded and the
+  page comes back `unknown`; post-fix the gutter is measured and it is correctly
+  `multi-column` (est 2). `_verify/prove-dense-script-fixture.py` shows both
+  directions, swapping the filter **and** its `_dropped_blocks_look_like_a_column`
+  guard together — pairing an old filter with a new guard reconstructs a version
+  that never shipped. `short-column.pdf` remains the control and stays `unknown`,
+  because `Fig. 3a` and `12.5%` really are page furniture.
+
+### Notes
+
+- **The English corpus cannot show this fix working, by construction.** The 71-paper
+  trial corpus contains **zero** CJK characters, so a Latin-identical change is
+  necessarily invisible on it — which is exactly why the fixture exists. The
+  real-world effect was measured separately, on a wider 121-PDF tree containing 26
+  Chinese documents: on the Chinese review article, page 6's multi-column evidence
+  rises from **0.067 to 0.875** of bands (kept blocks 13 → 71) and page 8's from
+  **0.000 to 0.875**. Its document verdict was already `multi-column` and stays so —
+  what the fix removes is the reliance on a lucky page.
+- **One verdict changed in that 121-PDF tree**, and it is reported rather than
+  smoothed over: a single-page figure (`04-图表/图1-五条判据.pdf`) moves
+  `unknown` → `single-column`, so its recommendation moves `pdf_markdown` →
+  `markitdown`. The page was rendered and inspected: it is one horizontal bar chart
+  with no column structure, so the new verdict is consistent with the page. It is not
+  a reference paper and carries no shredding risk.
+- **Still unverified:** how the npm package page renders GitHub-only syntax
+  (`> [!NOTE]` alerts and `<details>`), and whether it resolves relative links to
+  files the tarball *does* ship. Unchanged from `0.4.0`; npmjs.com returns HTTP 403
+  to the fetch tool. Absolute URLs are used because they are safe under *every*
+  renderer, not because npm's behaviour is known.
+
 ## [0.4.0] — 2026-10-03
 
 A defaults-and-documentation release. The routing verdict itself is untouched;
@@ -414,7 +468,8 @@ open-source project.
 - `lib/docprobe.py`, a stdlib + PyMuPDF probe that degrades instead of crashing
   when PyMuPDF is absent, and always answers in JSON.
 
-[Unreleased]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.2.0...v0.2.1

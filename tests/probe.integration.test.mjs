@@ -105,13 +105,26 @@ test('route classifies every fixture as documented', { skip: !interpreter.availa
         },
         {
             // Two real columns, but the right one is entirely short blocks (a
-            // figure/table list), so the 25-character filter discards it. The
-            // surviving column used to look like a confident single-column page,
-            // which routed the document to markitdown. Must be `unknown`.
+            // figure/table list), so the block filter discards it. The surviving
+            // column used to look like a confident single-column page, which
+            // routed the document to markitdown. Must be `unknown`.
             file: 'short-column.pdf',
             format: 'pdf',
             columns: 'unknown',
             column_estimate: null,
+            text_layer: true,
+            recommend: ['pdf_markdown'],
+        },
+        {
+            // `short-column.pdf`'s geometry with the short right column in
+            // Chinese instead of Latin. The threshold counts *content*, and 25
+            // codepoints of Chinese is far more text than 25 codepoints of Latin,
+            // so a codepoint-counting filter threw away a whole column of real
+            // body text. Now the column survives and the gutter is measured.
+            file: 'dense-script-column.pdf',
+            format: 'pdf',
+            columns: 'multi-column',
+            column_estimate: 2,
             text_layer: true,
             recommend: ['pdf_markdown'],
         },

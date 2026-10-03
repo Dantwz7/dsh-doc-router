@@ -26,6 +26,7 @@ fixtures that no longer test what they claim.
 | `three-column.pdf` | Three columns → est **3**; the middle-column layout a middle-gutter heuristic misses |
 | `two-column-watermark.pdf` | Two columns plus a full-height ~7pt margin stamp → still est **2**, not 3 |
 | `short-column.pdf` | Two columns, the right one entirely short blocks → `columns: unknown`, **not** `single-column` |
+| `dense-script-column.pdf` | `short-column.pdf`'s geometry with a **Chinese** right column → `columns: multi-column`, est **2** (the weighted threshold keeps it) |
 | `unknown-columns.pdf` | Text present but one block per page → `columns: unknown` → `pdf_markdown` (safe side) |
 | `single-column.pdf` | One text box → `columns: single-column` → `markitdown` / `pypdf` |
 | `scanned.pdf` | JPEG-only page, zero text layer → `render_to_png + read_image` |
@@ -112,6 +113,48 @@ at least 25 characters, every right-hand line under it — and `self_check()` as
 that `generate.py`'s `SHORT_BLOCK_CHARS` still equals `docprobe.MIN_BLOCK_CHARS`. If
 the threshold moves, regeneration fails instead of quietly turning this into an
 ordinary two-column fixture.
+
+## `dense-script-column.pdf`: the filter's unit, not just its value
+
+The threshold above is a **content** threshold — roughly "half a line of body
+text" — but until 0.5.0 it was counted in **raw codepoints**. That is not the same
+amount of content in every script: a Chinese word is 1-2 ideographs while an English
+word is ~5 letters, so 25 codepoints of Chinese is far more text than 25 codepoints
+of Latin. The filter was therefore **several times more aggressive on Chinese PDFs**
+and discarded real body text — and when what it discarded was a whole column, the
+page lost every trace of that column.
+
+This fixture isolates exactly that variable. It has `short-column.pdf`'s geometry
+*and the same left column*; the only difference is that the short right column is
+Chinese (`界面残留会显著降低器件性能`, …) instead of Latin (`Fig. 3a`, …). Every
+entry is under 25 codepoints yet at least 25 latin-equivalent ones — both halves are
+asserted in `generate.py`, along with `docprobe.CJK_CHAR_WEIGHT` itself.
+
+Measured on this fixture (`_verify/prove-dense-script-fixture.py`; both halves of the
+rule — the filter *and* the `_dropped_blocks_look_like_a_column` guard — are swapped
+together, because pairing an old filter with a new guard reconstructs a version that
+never shipped):
+
+| | pre-fix (codepoints) | post-fix (weighted) |
+|---|---|---|
+| Candidate blocks | 24 | 24 |
+| Kept | **11** | **24** |
+| Right column | discarded | kept |
+| Profile | `None` | `(0.75, 2.0)` |
+| Verdict | `unknown` | **`multi-column`** |
+| Routes to | `pdf_markdown` (safe, but the evidence was thrown away) | `pdf_markdown` (correct) |
+
+`short-column.pdf` is the control and must **not** move: its entries really are page
+furniture, it keeps 11 of 22 blocks under both units, and it stays `unknown` either
+way. The fix does not loosen the filter for Latin — it stops the filter from
+mistaking *Chinese body text* for furniture.
+
+Note what this fixture does and does not claim. It is `unknown` → `multi-column`, not
+`single-column` → `multi-column`: the pre-fix guard already prevented the dangerous
+misroute. What was lost was the *evidence*, and the page fell back to the safe side
+instead of being read correctly. Asserting `multi-column` here is not a guess from
+discarded evidence — the whole point is that after the fix the evidence is no longer
+discarded.
 
 ## A note on the `magic-*` fixtures
 

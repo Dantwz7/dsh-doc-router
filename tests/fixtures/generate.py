@@ -50,7 +50,42 @@ FONT, SIZE, LEADING = "helv", 9.5, 12.0
 # importable without docprobe; `self_check()` asserts the two still agree, so a
 # change on either side fails loudly instead of silently invalidating the fixture
 # that exists to exercise the filter.
+#
+# The unit matters: since 0.5.0 this counts **latin-equivalent codepoints**, not raw
+# codepoints (see `DENSE_CHAR_WEIGHT`). A pure-Latin block is unaffected, which is
+# why `SHORT_BLOCK_CHARS` still describes the Latin fixtures exactly.
 SHORT_BLOCK_CHARS = 25
+
+# Mirrors `CJK_CHAR_WEIGHT`: one ideograph counts as this many latin-equivalent
+# codepoints, because a Chinese word is 1-2 ideographs while an English word is
+# ~5 letters. `self_check()` asserts this too.
+DENSE_CHAR_WEIGHT = 2
+
+# PyMuPDF's built-in Simplified-Chinese font. Deliberately **not** a system font:
+# the fixture must regenerate identically on a machine with no CJK font installed.
+# Verified to round-trip through `get_text()` — which is the whole point, since the
+# block filter reads the extracted text.
+DENSE_FONT = "china-s"
+
+# Right-column entries for `dense-script-column.pdf`. Every one is short *as
+# codepoints* yet substantial *as content* — the exact disagreement the weighted
+# threshold exists to fix. Both halves are asserted in the builder.
+DENSE_RIGHT_ENTRIES = (
+    "界面残留会显著降低器件性能",
+    "环境稳定性决定工艺窗口宽窄",
+    "晶格匹配程度影响外延薄膜质量",
+    "水溶性牺牲层可在数分钟内溶解",
+    "工艺兼容性要求可原位生长薄膜",
+    "衬底可重复使用且物性不退化",
+    "远程外延依赖衬底表面的电荷分布",
+    "二维材料转移需要完整的界面接触",
+    "牺牲层厚度影响剥离后的表面粗糙度",
+    "化学腐蚀速率必须与薄膜厚度匹配",
+    "外延层与衬底之间保持共格界面",
+    "退火温度决定结晶质量与缺陷密度",
+    "大面积制备仍需解决均匀性问题",
+    "器件性能对界面缺陷非常敏感",
+)
 
 # Synthetic stand-in for the publisher stamp that runs down a PDF's page edge.
 MARGIN_STAMP = (
@@ -99,16 +134,31 @@ def wrap(text: str, width_chars: int) -> list[str]:
     return lines
 
 
-def _draw_column(page, x: float, width: float, lines: list[str], gap_lines: int) -> None:
+def _draw_column(
+    page,
+    x: float,
+    width: float,
+    lines: list[str],
+    gap_lines: int,
+    *,
+    fontname: str = FONT,
+    char_width_factor: float = 0.5,
+) -> None:
     """Draw wrapped lines down a column, leaving `gap_lines` blank lines between
-    paragraphs so the extractor sees them as distinct blocks."""
+    paragraphs so the extractor sees them as distinct blocks.
+
+    `char_width_factor` is the average glyph advance as a fraction of the font
+    size: ~0.5em for Helvetica, but ~1.0em for CJK, where every glyph is full
+    width. Both defaults reproduce the original Latin-only behaviour, so the
+    pre-existing fixtures regenerate byte-identically.
+    """
     y = TOP
-    width_chars = max(20, int(width / (0.5 * SIZE)))
+    width_chars = max(20, int(width / (char_width_factor * SIZE)))
     for text in lines:
         for line in wrap(text, width_chars):
             if y > BOTTOM:
                 return
-            page.insert_text((x, y), line, fontname=FONT, fontsize=SIZE)
+            page.insert_text((x, y), line, fontname=fontname, fontsize=SIZE)
             y += LEADING
         y += gap_lines * LEADING
 
@@ -258,6 +308,78 @@ def build_short_column_pdf(path: Path) -> None:
 
     _draw_column(page, MARGIN, col_w, left, 1)
     _draw_column(page, MARGIN + col_w + GUTTER, col_w, right, 1)
+
+    doc.save(str(path))
+    doc.close()
+
+
+def build_dense_script_column_pdf(path: Path) -> None:
+    """`short-column.pdf`'s geometry, but the short right column is **Chinese**.
+
+    A controlled comparison, and the regression for the *unit* the block filter
+    counts in. `short-column.pdf` holds the layout constant and varies nothing but
+    which column is short; this one holds the layout *and the left column* constant
+    and varies only the **script** of the short column.
+
+    The threshold `MIN_BLOCK_CHARS` is a *content* threshold — roughly "half a line
+    of body text". Counted in raw codepoints it is not the same amount of content in
+    both scripts: a Chinese word is 1-2 ideographs while an English word is ~5
+    letters, so 25 codepoints of Chinese is far more text than 25 codepoints of
+    Latin. A codepoint-counting filter therefore discards real Chinese body text
+    that it keeps in English — and when the discarded text is a whole column, the
+    page loses all evidence of that column.
+
+    Before the fix: the right column vanished, `_dropped_blocks_look_like_a_column`
+    saw surviving evidence on one side only, and the page came back `unknown` (safe,
+    but not *right* — it had the evidence and threw it away). After the fix the
+    right column survives the filter, the gutter is measured, and the page is
+    correctly `multi-column`.
+
+    Note the deliberate contrast with `short-column.pdf`, which stays `unknown`:
+    "Fig. 3a" and "12.5%" really are page furniture and must keep being discarded.
+    The fix does not loosen the filter for Latin — it only stops the filter from
+    mistaking *Chinese* body text for furniture.
+
+    Both halves of the premise are asserted, so a font, weight or threshold change
+    cannot quietly turn this into a fixture that tests nothing.
+    """
+    import pymupdf
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=PAGE_W, height=PAGE_H)
+    col_w = (PAGE_W - 2 * MARGIN - GUTTER) / 2
+
+    # Left column: ordinary Latin prose, identical to short-column.pdf, comfortably
+    # over the threshold in either unit.
+    left = list(SENTENCES)
+    for line in left:
+        assert len(line) >= SHORT_BLOCK_CHARS, f"kept line is too short: {line!r}"
+
+    # Right column: short but *meaningful* Chinese entries — a list of real points,
+    # not page furniture. Each is under 25 codepoints yet at least 25 equivalent
+    # ones, which is exactly the disagreement under test.
+    right = list(DENSE_RIGHT_ENTRIES)
+    for line in right:
+        assert len(line) < SHORT_BLOCK_CHARS, (
+            f"the old codepoint filter would keep {line!r} ({len(line)} codepoints) "
+            "— the fixture no longer exercises the unit bug"
+        )
+        assert len(line) * DENSE_CHAR_WEIGHT >= SHORT_BLOCK_CHARS, (
+            f"the weighted filter would drop {line!r} "
+            f"({len(line) * DENSE_CHAR_WEIGHT} equivalent codepoints)"
+        )
+
+    _draw_column(page, MARGIN, col_w, left, 1)
+    # CJK glyphs are full-width (~1em), so the wrap budget halves.
+    _draw_column(
+        page,
+        MARGIN + col_w + GUTTER,
+        col_w,
+        right,
+        1,
+        fontname=DENSE_FONT,
+        char_width_factor=1.0,
+    )
 
     doc.save(str(path))
     doc.close()
@@ -501,6 +623,12 @@ EXPECTED = {
         "text_layer": True,
         "recommend": ["pdf_markdown"],
     },
+    "dense-script-column.pdf": {
+        "columns": "multi-column",
+        "text_layer": True,
+        "column_estimate": 2,
+        "recommend": ["pdf_markdown"],
+    },
     "scanned.pdf": {"text_layer": False},
     "sample.docx": {"format": "docx"},
     "sample.xlsx": {"format": "xlsx"},
@@ -524,6 +652,15 @@ def self_check() -> int:
         failures.append(
             f"MIN_BLOCK_CHARS drifted: docprobe has {docprobe.MIN_BLOCK_CHARS}, "
             f"generate.py assumes {SHORT_BLOCK_CHARS} — short-column.pdf is now stale"
+        )
+    # Same contract for the weighted unit: if the ideograph weight moves,
+    # `dense-script-column.pdf`'s right column stops being "short by codepoints but
+    # long by content" and the fixture silently stops testing the unit bug.
+    if getattr(docprobe, "CJK_CHAR_WEIGHT", None) != DENSE_CHAR_WEIGHT:
+        failures.append(
+            f"CJK_CHAR_WEIGHT drifted: docprobe has "
+            f"{getattr(docprobe, 'CJK_CHAR_WEIGHT', None)}, generate.py assumes "
+            f"{DENSE_CHAR_WEIGHT} — dense-script-column.pdf is now stale"
         )
     for name, expected in EXPECTED.items():
         path = HERE / name
@@ -582,6 +719,7 @@ def main(argv: list[str]) -> int:
     build_reading_order_pdf(HERE / "two-column-reading-order.pdf", marker_count=15)
     build_three_column_pdf(HERE / "three-column.pdf", marker_count=15)
     build_short_column_pdf(HERE / "short-column.pdf")
+    build_dense_script_column_pdf(HERE / "dense-script-column.pdf")
     build_watermarked_pdf(HERE / "two-column-watermark.pdf", seed=23, gap_lines=args.gap_lines)
     build_unknown_pdf(HERE / "unknown-columns.pdf")
     build_scanned(HERE / "scanned.pdf", HERE / "single-column.pdf")

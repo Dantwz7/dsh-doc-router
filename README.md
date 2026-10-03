@@ -81,7 +81,7 @@ allowed — and a wrong path is reported as *the path you named*, not as a myste
 ### From npm (recommended)
 
 ```bash
-plugin_manager action=install_bundle target="dsh-doc-router@0.4.0"
+plugin_manager action=install_bundle target="dsh-doc-router@0.5.0"
 ```
 
 **Pin the exact version.** DSH's package manager applies a minimum-release-age
@@ -91,7 +91,7 @@ DSH afterwards.
 ### From the DSH CLI
 
 ```bash
-dsh plugin --profile <YOUR-PROFILE> add dsh-doc-router@0.4.0
+dsh plugin --profile <YOUR-PROFILE> add dsh-doc-router@0.5.0
 ```
 
 `<YOUR-PROFILE>` must be the profile DSH **actually boots**. `plugin_manager` above
@@ -141,7 +141,7 @@ doc_route({ path: "tests/fixtures/two-column.pdf" })
   If formulas, super/subscripts or digits must be exact, render that page to an image and check it
   Probe detail: {"1":"0.91/2col"}
 
-  dsh-doc-router v0.4.0
+  dsh-doc-router v0.5.0
 ```
 
 > The two advisory lines above are English because that is the **default** as of
@@ -174,6 +174,7 @@ Every row below was produced by running `doc_route` on the checked-in fixture:
 | `three-column.pdf` | pdf · 1 page · text layer · **multi-column (est 3)** | `pdf_markdown` |
 | `two-column-watermark.pdf` | pdf · 1 page · text layer · **multi-column (est 2 — not 3)** | `pdf_markdown` |
 | `unknown-columns.pdf` | pdf · 3 pages · text layer · **unknown** | `pdf_markdown` (safe side) |
+| `dense-script-column.pdf` | pdf · 1 page · text layer · **multi-column (est 2)** | `pdf_markdown` |
 | `single-column.pdf` | pdf · 1 page · text layer · single-column | `markitdown` → `pypdf` |
 | `scanned.pdf` | pdf · 1 page · **no text layer** | `render_to_png` → `read_image` |
 | `sample.docx` | docx | `markitdown` |
@@ -209,10 +210,17 @@ single-column pages too, whereas a missed multi-column page is handed to a
 converter that destroys the body text. One mistake is cheap; the other is not.
 
 The same bet decides what happens when the column count **cannot be measured** —
-a page whose body is one large block, or many sub-25-character fragments, yields no
-usable band evidence. That is reported honestly as `unknown` and routed to
+a page whose body is one large block, or many fragments too short to be body text,
+yields no usable band evidence. That is reported honestly as `unknown` and routed to
 `pdf_markdown`, and is **never** described as single-column: guessing "single
 column" is the expensive direction, so a file we cannot measure takes the cheap one.
+
+"Too short to be body text" is measured in **content, not codepoints**. A block is
+discarded only below 25 *latin-equivalent* codepoints, where an ideograph counts as
+two — because a Chinese word is 1–2 ideographs while an English word is ~5 letters.
+Counting raw codepoints instead made the filter several times more aggressive on
+Chinese PDFs, and could throw away an entire column of real body text; see
+[`dense-script-column.pdf`](https://github.com/Dantwz7/dsh-doc-router/blob/main/tests/fixtures/README.md#dense-script-columnpdf-the-filters-unit-not-just-its-value).
 
 ### The routes
 
@@ -309,6 +317,7 @@ directory and file names):
 | `unknown` layouts | 2 → **routed to the safe side in `0.2.1`** |
 | "Succeeded" but produced garbage | **0** |
 | Verdicts changed by the short-block filter fix | **0 of 71** (whole corpus re-run, pre- vs post-fix) |
+| Verdicts changed by the weighted-threshold fix | **0 of 71**; **1 of 121** on a wider tree that includes 26 Chinese documents (a single-page figure, rendered and checked by eye) |
 
 One of the 47 is a genuine **three-column** Science article (three equal 164pt
 columns, abstract spanning the first two), so the `est 3` branch is exercised by
@@ -409,6 +418,16 @@ add a fixture that exercises the new boundary. See
       asserts multi-column from discarded evidence. Re-run over the whole 71-paper
       trial corpus, **0 verdicts changed**, so nothing the thresholds were tuned for
       regressed; `short-column.pdf` pins the behaviour.
+- [x] **Count the block filter's threshold in content, not codepoints.** — **done:**
+      the threshold is a *content* threshold ("about half a line of body text") but
+      was counted in raw codepoints, which is not the same amount of text in every
+      script. A Chinese word is 1–2 ideographs where an English word is ~5 letters,
+      so the filter was several times more aggressive on Chinese PDFs and discarded
+      real body text — including, potentially, a whole column of it. It now counts
+      *latin-equivalent* codepoints (`CJK_CHAR_WEIGHT = 2`), which leaves Latin text
+      **byte-identical** (0 of 71 corpus verdicts changed) while keeping Chinese
+      body text. `dense-script-column.pdf` pins both halves: the Chinese column is
+      recovered, and its Latin control still discards.
 - [ ] Pluggable PDF backend, so a permissively licensed engine can replace PyMuPDF
       where AGPL is not an option.
 - [ ] TypeScript declarations for the exported surface.

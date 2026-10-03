@@ -77,7 +77,7 @@
 ### 从 npm 安装（推荐）
 
 ```bash
-plugin_manager action=install_bundle target="dsh-doc-router@0.4.0"
+plugin_manager action=install_bundle target="dsh-doc-router@0.5.0"
 ```
 
 **请写精确版本。** DSH 的包管理器有最小发布年龄策略，只写包名可能悄悄解析到旧版本。
@@ -86,7 +86,7 @@ plugin_manager action=install_bundle target="dsh-doc-router@0.4.0"
 ### 从 DSH 命令行安装
 
 ```bash
-dsh plugin --profile <你的 profile> add dsh-doc-router@0.4.0
+dsh plugin --profile <你的 profile> add dsh-doc-router@0.5.0
 ```
 
 `<你的 profile>` 必须是 DSH **实际启动**的那个。拿不准就用上面的 `plugin_manager`，
@@ -134,7 +134,7 @@ doc_route({ path: "tests/fixtures/two-column.pdf" })
 
   Probe detail: {"1":"0.91/2col"}
 
-  dsh-doc-router v0.4.0
+  dsh-doc-router v0.5.0
 ```
 
 > 上面两行提示语是中文，因为这一段是在 `noteLanguage: 'zh'` 下跑的。**`0.4.0` 起
@@ -165,6 +165,7 @@ pdf_markdown({ path: "tests/fixtures/two-column.pdf", pages: "1", output: "paper
 | `three-column.pdf` | pdf · 1 页 · 有文字层 · **多栏（估 3 栏）** | `pdf_markdown` |
 | `two-column-watermark.pdf` | pdf · 1 页 · 有文字层 · **多栏（估 2 栏——不是 3）** | `pdf_markdown` |
 | `unknown-columns.pdf` | pdf · 3 页 · 有文字层 · **unknown** | `pdf_markdown`（安全侧） |
+| `dense-script-column.pdf` | pdf · 1 页 · 有文字层 · **多栏（估 2 栏）** | `pdf_markdown` |
 | `single-column.pdf` | pdf · 1 页 · 有文字层 · 单栏 | `markitdown` → `pypdf` |
 | `scanned.pdf` | pdf · 1 页 · **无文字层** | `render_to_png` → `read_image` |
 | `sample.docx` | docx | `markitdown` |
@@ -197,9 +198,15 @@ pdf_markdown({ path: "tests/fixtures/sample.docx" })
 最后一条是刻意的不对称下注：`pymupdf4llm` 对单栏同样适用，而漏判会把多栏交给
 会毁掉正文的转换器。一种误判很便宜，另一种不是。
 
-同一个下注也决定了**测不出栏数**时怎么办——某页正文只有一个大块、或全是碎片短块，
-就给不出可用的横带证据。这种判定如实报为 `unknown`，并路由到 `pdf_markdown`，
+同一个下注也决定了**测不出栏数**时怎么办——某页正文只有一个大块、或全是短到不成正文的
+碎片，就给不出可用的横带证据。这种判定如实报为 `unknown`，并路由到 `pdf_markdown`，
 **绝不**被说成单栏：猜「单栏」是昂贵的方向，测不准的文件走便宜的那条。
+
+「短到不成正文」是按**内容量**而不是**码点数**量的。只有短于 25 个*拉丁等数码点*的块
+才会被丢掉，其中**一个汉字算两个**——因为一个中文词是 1-2 个字，而一个英文词约 5 个字母。
+若按码点数直接计，这个过滤在中文 PDF 上会**成倍地更激进**，可能把整整一栏正文丢掉；
+详见
+[`dense-script-column.pdf`](https://github.com/Dantwz7/dsh-doc-router/blob/main/tests/fixtures/README.md#dense-script-columnpdf-the-filters-unit-not-just-its-value)。
 
 ### 判据给出的路由
 
@@ -286,6 +293,7 @@ Sci. Adv. / arXiv，2–83 页，含中文目录与文件名）上跑过：
 | `unknown` 版面 | 2 例 → **`0.2.1` 已改走安全侧** |
 | 「成功但结果是垃圾」 | **0 例** |
 | 短块过滤修复改动的判据数 | **71 篇中 0 篇**（全语料修复前后各跑一遍） |
+| 阈值单位（拉丁等数码点）修复改动的判据数 | **71 篇中 0 篇**；含 26 篇中文文档的更大目录树 121 篇中 **1 篇**（一张单页图，已渲染核对） |
 
 47 篇里有 1 篇是真正的**三栏** Science 论文（三个等宽 164pt 栏，摘要横跨前两栏），
 所以 `est 3` 这条分支有真实输入在跑，不只是合成夹具。
@@ -376,6 +384,13 @@ docstring 里的理由**和**上面的表格，并补一个覆盖新边界的夹
       之外时，`_column_profile` 改判 `unknown`（→ `pdf_markdown`）。
       只走安全侧：绝不拿丢弃的证据去**断言**多栏。在真实 71 篇语料上重跑，
       **0 篇判据发生变化**，说明阈值当初调优的结果没有回退；`short-column.pdf` 钉住该行为。
+- [x] **把块过滤的阈值按「内容量」而不是「码点数」计。** —— **已完成：**
+      这个阈值本是**内容**阈值（「大约半行正文」），却按**码点数**计，而同一个码点数
+      在不同文字系统里代表的内容量并不相同：一个中文词是 1-2 个字，一个英文词约 5 个字母。
+      于是过滤在中文 PDF 上**成倍地更激进**，会丢掉真正的正文——甚至可能是整整一栏。
+      现在改计*拉丁等数码点*（`CJK_CHAR_WEIGHT = 2`），拉丁文本因此**逐字符不变**
+      （71 篇语料 **0 篇判据变化**），而中文正文得以保留。`dense-script-column.pdf`
+      同时钉住两头：中文那一栏被恢复，而它的拉丁对照仍然照旧丢弃。
 - [ ] PDF 后端可插拔，使 AGPL 不可接受的场景能换用宽松许可的引擎。
 - [ ] 为导出面补 TypeScript 类型声明。
 - [ ] 可选的扫描件 OCR 通路（目前止步于「渲染成 PNG 看图」）。

@@ -104,14 +104,65 @@ TEXT_LAYER_MIN_CHARS_PER_PAGE = 120
 COLUMN_GUTTER_THRESHOLD = 0.35
 MIN_PAGE_CHARS_FOR_COLUMNS = 300
 MAX_SAMPLED_PAGES = 5
-# 短于这个长度的文本块不参与栏数分析：页码、页眉、图注残片之类的噪声。
+
+# 短于这个「长度」的文本块不参与栏数分析：页码、页眉、图注残片之类的噪声。
 # 但它**不分栏**，所以调用方必须处理「某一栏被整体滤掉」的情况，见
 # `_dropped_blocks_look_like_a_column`。
+#
+# 这个长度**不是码点数，而是「拉丁等数码点」**（见 `_block_weight`）。25 本身
+# 不是排版尺度，而是「大约半行正文」这个**内容量**在拉丁字母里的码点数。把它
+# 直接当码点数用，等于假设「1 码点 = 1 单位内容」——这在密集文字系统里不成立：
+# 一个汉字（或假名、谚文音节）承载的内容约等于两个拉丁字母（一个英文词约 5 个
+# 字母，一个中文词约 1-2 个字）。于是同一个「半行正文」在中文里只有约 12-13 个
+# 码点，过滤器在中文 PDF 上会**成倍地更激进**，把真正的正文当成页码滤掉；被滤掉
+# 的若恰好是整栏，页面剩下的就是「确信的单栏」证据——正是代价不对称原则最怕的
+# 方向（见 `_dropped_blocks_look_like_a_column`）。
+#
+# 单位换算之后，纯拉丁文本**逐字符不变**（71 篇英文语料 0 判据变化），而密集
+# 文字不再被过度过滤。边界由 `tests/fixtures/dense-script-column.pdf` 钉住：
+# 右栏每行 13-16 个汉字（26-32 等数码点）——旧实现整栏丢弃、判 `unknown`，
+# 新实现留下证据、正确判 `multi-column`。
 MIN_BLOCK_CHARS = 25
+
+# 一个密集文字码点折算成多少个「拉丁等数码点」。取 2 而不是更大：这是**保守**
+# 的一端（放宽得少），且 2 已足够把中文一侧的边界从 25 个汉字放宽到 13 个。
+#
+# **这是一个建模选择，不是测量结果。** 它只要求「一个汉字承载的内容约等于两个
+# 拉丁字母」这个量级成立，不依赖任何精确的字宽或字体度量。它放宽的只是**密集
+# 文字**的阈值；拉丁文本走 `_block_weight` 的 ASCII 快路径，一字未动，因此不存在
+# 「阈值调松导致英文语料回退」的风险——71 篇英文语料的 0 判据变化正是这一点的实测。
+CJK_CHAR_WEIGHT = 2
+
+
+def _is_dense_script(ch: str) -> bool:
+    """该码点是否属于「一字约一词素」的密集文字系统。
+
+    这些文字里 1 个码点就承载一个词素，而拉丁文字要 5-6 个码点才凑成一个词，
+    所以「字符数」在两者里不是同一个单位。
+    """
+    code = ord(ch)
+    return (
+        0x3040 <= code <= 0x30FF  # 平假名 / 片假名
+        or 0x3400 <= code <= 0x4DBF  # CJK 统一表意文字扩展 A
+        or 0x4E00 <= code <= 0x9FFF  # CJK 统一表意文字
+        or 0xF900 <= code <= 0xFAFF  # CJK 兼容表意文字
+        or 0xAC00 <= code <= 0xD7AF  # 谚文音节
+    )
+
+
+def _block_weight(text: str) -> int:
+    """文本块的「长度」，单位是拉丁等数码点（见 `MIN_BLOCK_CHARS` 的说明）。
+
+    纯 ASCII 走 `len()` 的快路径：拉丁文本因此**逐字符不变**，既保证英文语料
+    的判据一字不动，也免去对绝大多数块的逐字符扫描。
+    """
+    if text.isascii():
+        return len(text)
+    return sum(CJK_CHAR_WEIGHT if _is_dense_script(ch) else 1 for ch in text)
 
 
 def _dropped_blocks_look_like_a_column(all_blocks, kept_blocks, width: float) -> bool:
-    """被字符数过滤丢掉的块，是否落在保留文本区的**左右两侧之外**（像另一栏）。
+    """被块长过滤丢掉的块，是否落在保留文本区的**左右两侧之外**（像另一栏）。
 
     过滤本意是滤掉页码之类的噪声，但它**不分栏**。当双栏页的其中一栏全是短块
     （一张图、一张表、一列短条目），那一栏会整体消失，剩下那一栏看起来就是一个
@@ -135,7 +186,7 @@ def _dropped_blocks_look_like_a_column(all_blocks, kept_blocks, width: float) ->
     dropped = [
         b
         for b in all_blocks
-        if len(b[4].strip()) < MIN_BLOCK_CHARS
+        if _block_weight(b[4].strip()) < MIN_BLOCK_CHARS
         and b[0] >= margin
         and b[2] <= width - margin
     ]
@@ -194,7 +245,7 @@ def _column_profile(page) -> tuple[float, float] | None:
         for b in page.get_text("blocks")
         if b[6] == 0 and b[1] < height * 0.90 and b[3] > height * 0.10
     ]
-    blocks = [b for b in all_blocks if len(b[4].strip()) >= MIN_BLOCK_CHARS]
+    blocks = [b for b in all_blocks if _block_weight(b[4].strip()) >= MIN_BLOCK_CHARS]
     if len(blocks) < 6:
         return None
 
