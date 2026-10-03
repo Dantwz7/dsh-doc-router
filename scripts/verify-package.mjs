@@ -10,7 +10,7 @@
  * Usage: node scripts/verify-package.mjs
  */
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -74,18 +74,42 @@ const DEV_ONLY_SCRIPTS = new Set([
     'verify:docs',
 ]);
 
-const npmCli = process.env.npm_execpath;
+/**
+ * Locate npm's CLI entry point so it can be spawned as `node npm-cli.js …`
+ * rather than through a shell.
+ *
+ * `npm run` exports `npm_execpath`, which is the direct answer. Invoked as a
+ * plain `node scripts/verify-package.mjs` it is unset, and the previous fallback
+ * was `spawnSync('npm', args, { shell: true })` — which Node warns about
+ * (DEP0190: arguments passed alongside `shell: true` are concatenated, not
+ * escaped). npm ships inside the Node installation, so it can be found from
+ * `process.execPath` and spawned with `shell: false`, like every other child
+ * process this repository starts.
+ *
+ * @returns the path to npm's CLI, or undefined when it cannot be located.
+ */
+function findNpmCli() {
+    const fromEnv = process.env.npm_execpath;
+    if (typeof fromEnv === 'string' && fromEnv !== '') return fromEnv;
+
+    const nodeDir = dirname(process.execPath);
+    return [
+        // Windows and Unix Node layouts both keep npm in this position.
+        join(nodeDir, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+        join(nodeDir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    ].find((candidate) => existsSync(candidate));
+}
+
+const npmCli = findNpmCli();
+const packArgs = ['pack', '--dry-run', '--json'];
 const result = spawnSync(
     npmCli === undefined ? 'npm' : process.execPath,
-    npmCli === undefined
-        ? ['pack', '--dry-run', '--json']
-        : [npmCli, 'pack', '--dry-run', '--json'],
+    npmCli === undefined ? packArgs : [npmCli, ...packArgs],
     {
         cwd: repoRoot,
         encoding: 'utf8',
-        // Spawning npm.cmd on Windows requires a shell (Node refuses .cmd
-        // directly). When invoked through `npm run`, npm_execpath lets us call
-        // the CLI with the current node instead, avoiding the shell entirely.
+        // Only reachable when npm's CLI could not be located at all. On Windows a
+        // bare `npm` is a .cmd shim, which Node refuses to spawn without a shell.
         shell: npmCli === undefined && process.platform === 'win32',
     },
 );

@@ -209,12 +209,64 @@ Releases are cut from `main` and published to npm by a maintainer:
 2. Bump `version` in `package.json` (SemVer; the plugin is pre-1.0 while DSH
    itself is pre-1.0).
 3. `npm test`.
-4. `npm pack --dry-run` and confirm the tarball contains exactly `lib/`,
+4. **The README pass** — re-read both READMEs, run `npm run verify:docs`, and
+   improve them. See [§7.1](#71-the-readme-pass-every-release). This is a
+   standing rule, not a one-off cleanup.
+5. `npm run verify:package` and confirm the tarball contains exactly `lib/`,
    `cordis.patch.yml`, the READMEs, `LICENSE`, `NOTICE`, and `CHANGELOG.md` —
    no tests, no fixtures, no stray files.
-5. Commit as `chore(release): vX.Y.Z`, tag `vX.Y.Z`, push the tag.
-6. `npm publish`.
-7. Create the GitHub release from the changelog entry.
+6. Commit as `chore(release): vX.Y.Z`, tag `vX.Y.Z`, push the tag.
+7. `npm publish`.
+8. Create the GitHub release from the changelog entry.
+
+### 7.1 The README pass (every release)
+
+This project has a standing rule: **before every release, run the READMEs and
+improve them.** "Qualified" is the floor; "beautiful" is the ongoing goal. Treat
+it as a release step of the same rank as `npm test`.
+
+```bash
+npm run verify:docs
+```
+
+That command is the mechanical half, and it runs in CI:
+
+* every relative link resolves to a file that exists **and that `npm publish`
+  actually ships**. The npm package page is rendered from the tarball, so a
+  relative link to a file outside `package.json`'s `files` allow-list is a 404
+  for npm readers even though it works on GitHub. Cross-file links therefore use
+  absolute GitHub URLs — eight of them shipped as broken relative links in
+  `0.3.0`, which is why this check exists.
+* every absolute GitHub `blob`/`raw` URL points at a path that exists here, and
+  any `#anchor` on it names a real heading.
+* every in-page anchor names a real heading.
+* `README.md` and `README.zh.md` keep identical H2 / H3 / code-fence / table /
+  `<details>` / badge counts, so the Chinese mirror cannot drift from the
+  English primary.
+
+The editorial half is a judgement call, so it stays a checklist:
+
+1. **First screen** — project name, one-sentence positioning, badges that all
+   render.
+2. **Numbers are real** — every figure was measured on the file that is actually
+   in the repository, never on a scratch sample; anything unmeasured is labelled
+   "unverified" rather than implied.
+3. **A claim that the tests assert something is a claim the tests check.**
+4. **Prefer a table or a `<details>` block to a paragraph** for anything long.
+5. **Completed roadmap items are ticked**, and stale ones are gone.
+6. Pick one or two things to make *nicer*. That part has no checklist, only the
+   direction above.
+
+Do not trade a fact for a flourish: **beauty never outranks accuracy.** If a
+renderer's behaviour is unverified (see the note below), say so rather than
+reshaping the document around a guess.
+
+> **Known-unknown:** how the npm package page renders GitHub-only syntax
+> (`> [!NOTE]` alerts, `<details>`) is **not verified** — npmjs.com returns
+> HTTP 403 to the fetch tool used here. Absolute URLs are used for links because
+> they are safe under *every* renderer, not because npm's behaviour is known.
+> Do not remove the callouts or `<details>` blocks on the assumption that npm
+> drops them; measure first.
 
 ## 8. Reporting bugs
 

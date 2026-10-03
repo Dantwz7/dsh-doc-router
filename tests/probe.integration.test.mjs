@@ -264,7 +264,10 @@ test('an undecidable layout is routed to the safe side, not asserted to be singl
     // success. Guessing wrong is asymmetric: pdf_markdown on a single-column
     // file merely costs time; markitdown on a multi-column file destroys the
     // body text.
-    const { parsed } = probe(['route', fixture('unknown-columns.pdf')]);
+    // `--lang zh` is explicit: the default language is English now, so the
+    // Chinese wording only appears when it is asked for. This test exists to pin
+    // the Chinese wording, so it has to ask.
+    const { parsed } = probe(['route', fixture('unknown-columns.pdf'), '--lang', 'zh']);
     assert.equal(parsed.columns, 'unknown');
     assert.deepEqual(parsed.recommend, ['pdf_markdown']);
     assert.equal(parsed.text_layer, true, 'a text layer exists; this is not a scan');
@@ -296,11 +299,12 @@ test('a column made entirely of short blocks is not reported as single-column', 
     assert.equal(parsed.text_layer, true, 'a text layer exists; this is not a scan');
 });
 
-test('advisory notes are available in English too', { skip: !interpreter.available && interpreter.reason }, async () => {
-    // The npm README is English, and the notes travel with the tool result, so the
-    // English README used to have to print "[2 advisory lines omitted]" over output
-    // this package emits itself. `--lang en` removes that.
-    const { parsed } = probe(['route', fixture('unknown-columns.pdf'), '--lang', 'en']);
+test('the default advisory language is English', { skip: !interpreter.available && interpreter.reason }, async () => {
+    // The notes travel with the tool result and the npm README is English, so
+    // English is the default; `--lang zh` selects Chinese. Before this option
+    // existed the notes were Chinese only, and the English README had to print
+    // "[2 advisory lines omitted]" over output this package emits itself.
+    const { parsed } = probe(['route', fixture('unknown-columns.pdf')]);
     assert.equal(parsed.columns, 'unknown', 'the verdict itself is language-independent');
     assert.deepEqual(parsed.recommend, ['pdf_markdown']);
     const notes = parsed.notes.join(' ');
@@ -312,7 +316,7 @@ test('advisory notes are available in English too', { skip: !interpreter.availab
         /single column/i,
         'must not claim a single column it never measured',
     );
-    assert.doesNotMatch(notes, /[\u4e00-\u9fff]/, 'no Chinese left in the English notes');
+    assert.doesNotMatch(notes, /[\u4e00-\u9fff]/, 'no Chinese in the default English notes');
 });
 
 test('an unknown --lang falls back to the default instead of failing', { skip: !interpreter.available && interpreter.reason }, async () => {
@@ -320,7 +324,11 @@ test('an unknown --lang falls back to the default instead of failing', { skip: !
     assert.equal(status, 0);
     assert.equal(parsed.error, undefined);
     assert.equal(parsed.columns, 'unknown');
-    assert.match(parsed.notes.join(' '), /未能判定栏数/, 'falls back to the default language');
+    assert.match(
+        parsed.notes.join(' '),
+        /could not be determined/,
+        'falls back to the default language, which is English',
+    );
 });
 
 test('a margin stamp is not counted as a column', { skip: !interpreter.available && interpreter.reason }, async () => {

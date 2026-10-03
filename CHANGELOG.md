@@ -5,6 +5,73 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-10-03
+
+A defaults-and-documentation release. The routing verdict itself is untouched;
+what changes is the language its advisory notes come out in, and how the READMEs
+are kept honest.
+
+### Added
+
+- **`scripts/check-doc-links.mjs` now checks the npm rendering surface**, not
+  just local file existence. It validates absolute GitHub `blob`/`raw` links
+  (target path and `#anchor`), and it **diffs every relative link in the READMEs
+  against `package.json`'s `files` allow-list** — a relative link to a file the
+  tarball does not ship is a 404 on the npm package page even though it works on
+  GitHub. It also asserts that the two READMEs keep identical H2 / H3 /
+  code-fence / table / `<details>` / badge counts, so the Chinese mirror cannot
+  drift from the English primary.
+- **`the configured noteLanguage reaches the probe`**, an end-to-end assertion
+  that a non-default `noteLanguage` actually arrives in the probe's argv. With
+  both sides defaulting to English, a JS layer that silently dropped `--lang`
+  would otherwise still look correct through the default alone.
+
+### Changed
+
+- **`noteLanguage` now defaults to `'en'`, not `'zh'`.** The advisory notes travel
+  with the tool result, and this project's primary documentation — the README npm
+  renders — is English, so English is the default. **This is user-visible for
+  existing installs:** a `doc_route` result that carried Chinese advisory lines
+  now carries English ones. Set `noteLanguage: 'zh'` to get the previous output.
+  The verdict, `recommend` and `probe` fields were always language-neutral and are
+  unaffected.
+- **README polish**, under the project rule that "qualified" is the floor and
+  "beautiful" is the ongoing goal. Quick start is split into numbered
+  "1. Route it" / "2. Convert it" steps; Install keeps its four channels
+  contiguous and ends with the optional PyMuPDF step; Configuration gained a
+  field / default / effect table; and the reproducibility table in "Why this
+  exists" now carries both the two- and the three-column fixture.
+- `CONTRIBUTING.md` §7 documents the README pass as a release step, separating
+  the mechanical checks (`npm run verify:docs`) from the editorial checklist.
+
+### Fixed
+
+- **Eight cross-file links in each README pointed outside the npm tarball.**
+  `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `tests/fixtures/README.md`,
+  `tests/fixtures/generate.py`, `tests/manual/README.md`, the bug-report issue
+  template and the reading-order fixture were all linked relatively. They resolve
+  on GitHub and 404 on npm, because `files` ships nine entries. They now use
+  absolute GitHub URLs, which hold under every renderer.
+- **`scripts/verify-package.mjs` no longer needs a shell to invoke npm.** When
+  `npm_execpath` was unset — a plain `node scripts/verify-package.mjs` — it fell
+  back to `spawnSync('npm', args, { shell: true })`, which Node warns about
+  (DEP0190: arguments passed alongside `shell: true` are concatenated, not
+  escaped). npm ships inside the Node installation, so it is now located from
+  `process.execPath` and spawned with `shell: false`.
+
+### Notes
+
+- The three-column row was re-measured for this pass: `pdf_markdown` returns the
+  exact `L01…L15` `M01…M15` `R01…R15` sequence (**2** column alternations) where
+  MarkItDown 0.1.5 returns `L01 M01 R01 L02 …` (**44**). The two-column figures
+  (1 vs 29) are unchanged.
+- **Still unverified:** how the npm package page renders GitHub-only syntax
+  (`> [!NOTE]` alerts and `<details>`), and whether it resolves relative links to
+  files the tarball *does* ship. npmjs.com returns HTTP 403 to the fetch tool and
+  the npmmirror page is a client-rendered shell. Absolute URLs are used because
+  they are safe under *every* renderer, not because npm's behaviour is known — so
+  the callouts and `<details>` blocks are deliberately left alone.
+
 ## [0.3.0] — 2026-10-02
 
 This release closes the project's largest **evidence** gap. The suite could not detect a
@@ -347,7 +414,8 @@ open-source project.
 - `lib/docprobe.py`, a stdlib + PyMuPDF probe that degrades instead of crashing
   when PyMuPDF is absent, and always answers in JSON.
 
-[Unreleased]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.1.1...v0.2.0

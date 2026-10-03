@@ -5,7 +5,7 @@
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#许可证)
 [![node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-brightgreen.svg)](package.json)
 
-[English](README.md) | 中文
+[English](https://github.com/Dantwz7/dsh-doc-router/blob/main/README.md) | 中文
 
 > **先路由，再读取。** 一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
 > 插件：先探明文件的**真实格式**与 PDF 的**页面版面**，再把它交给该用的那条管线；
@@ -27,15 +27,17 @@
 | MarkItDown | 全 7 页 45 266 字符 | ❌ 正文碎成数百行 `\| … \|` 表格 |
 
 同一失败**可以在 clone 后自己复现**。用本仓库的
-[`two-column-reading-order.pdf`](tests/fixtures/two-column-reading-order.pdf)
-（一份两栏内容各自带标记的合成页），MarkItDown 0.1.5 会把**两栏同时**竖着读下去：
+[`two-column-reading-order.pdf`](https://github.com/Dantwz7/dsh-doc-router/blob/main/tests/fixtures/two-column-reading-order.pdf)
+与 [`three-column.pdf`](https://github.com/Dantwz7/dsh-doc-router/blob/main/tests/fixtures/three-column.pdf)
+（两栏 / 三栏内容各自带标记的合成页），MarkItDown 0.1.5 会把**每一栏同时**竖着读下去：
 
-| | `pdf_markdown` | MarkItDown 0.1.5 |
+| 夹具 | `pdf_markdown` | MarkItDown 0.1.5 |
 |---|---|---|
-| 阅读顺序 | `L01…L15`，然后 `R01…R15` | `L01 R01 L02 R02 …` —— **29 次跨栏跳变** |
+| `two-column-reading-order.pdf` | `L01…L15`，然后 `R01…R15` | `L01 R01 L02 R02 …` —— **29 次跨栏跳变** |
+| `three-column.pdf` | `L01…L15`、`M01…M15`，然后 `R01…R15` | `L01 M01 R01 L02 …` —— **44 次跨栏跳变** |
 
 整个论点就这一行：一条管线保住了栏，另一条把它们交错在一起。
-`npm test` 断言的就是上表第一列。
+`npm test` 断言的是上表两个 `pdf_markdown` 单元格里的阅读顺序。
 
 所以让模型「随便挑个转换器」的后果，是拿到一份被悄悄弄坏的原文，而且**看起来像是成功了**。
 解法不是找一个更好的转换器，而是**路由**：先看文件，再选管线。
@@ -75,7 +77,7 @@
 ### 从 npm 安装（推荐）
 
 ```bash
-plugin_manager action=install_bundle target="dsh-doc-router@0.3.0"
+plugin_manager action=install_bundle target="dsh-doc-router@0.4.0"
 ```
 
 **请写精确版本。** DSH 的包管理器有最小发布年龄策略，只写包名可能悄悄解析到旧版本。
@@ -84,7 +86,7 @@ plugin_manager action=install_bundle target="dsh-doc-router@0.3.0"
 ### 从 DSH 命令行安装
 
 ```bash
-dsh plugin --profile <你的 profile> add dsh-doc-router@0.3.0
+dsh plugin --profile <你的 profile> add dsh-doc-router@0.4.0
 ```
 
 `<你的 profile>` 必须是 DSH **实际启动**的那个。拿不准就用上面的 `plugin_manager`，
@@ -96,6 +98,16 @@ dsh plugin --profile <你的 profile> add dsh-doc-router@0.3.0
 - **`--help` 不是空跑。** `dsh plugin --profile <名字> --help` 会先把那个 profile
   初始化出来，再打印 pnpm 的帮助。
 
+### 从本地源码目录安装
+
+```bash
+plugin_manager action=install_bundle target="file:<仓库绝对路径>"
+```
+
+`file:` 安装是**拷贝**，所以**改源码不会生效**：必须升版本号 → 移除 bundle →
+重装 → **重启 DSH**。详见
+[CONTRIBUTING.md](https://github.com/Dantwz7/dsh-doc-router/blob/main/CONTRIBUTING.md#5-testing-against-a-real-dsh-install)。
+
 ### 启用版面探测
 
 ```bash
@@ -105,19 +117,11 @@ dsh plugin --profile <你的 profile> add dsh-doc-router@0.3.0
 没有 PyMuPDF 时插件**照常加载**，`doc_route` 仍能按格式判类；
 只有版面探测与 `pdf_markdown` 会停用，并且两者都会明确说明原因，而不是含糊地失败。
 
-### 从本地源码目录安装
-
-```bash
-plugin_manager action=install_bundle target="file:<仓库绝对路径>"
-```
-
-`file:` 安装是**拷贝**，所以**改源码不会生效**：必须升版本号 → 移除 bundle →
-重装 → **重启 DSH**。详见
-[CONTRIBUTING.md](CONTRIBUTING.md#5-testing-against-a-real-dsh-install)。
-
 ## 快速开始
 
 先路由，再转换。下面的例子全部取自本仓库自带的合成夹具，因此**每一行都可以在 clone 后复现**。
+
+### 1. 先路由
 
 ```text
 doc_route({ path: "tests/fixtures/two-column.pdf" })
@@ -130,8 +134,13 @@ doc_route({ path: "tests/fixtures/two-column.pdf" })
 
   Probe detail: {"1":"0.91/2col"}
 
-  dsh-doc-router v0.3.0
+  dsh-doc-router v0.4.0
 ```
+
+> 上面两行提示语是中文，因为这一段是在 `noteLanguage: 'zh'` 下跑的。**`0.4.0` 起
+> 默认是英文**——见[配置](#配置)。判据行、`recommend`、`probe` 三个字段与语言无关。
+
+### 2. 再转换
 
 ```text
 pdf_markdown({ path: "tests/fixtures/two-column.pdf" })
@@ -173,7 +182,7 @@ pdf_markdown({ path: "tests/fixtures/sample.docx" })
 > [!NOTE]
 > **关于提示语的语言。** 判据行、`recommend`、`probe` 三个字段与语言无关。
 > 紧随判据之后的两行自由文本提示语可用中英两种语言，由
-> [`noteLanguage`](#配置) 选择——**默认 `zh`**，所以现有安装看到的内容一字未变。
+> [`noteLanguage`](#配置) 选择——**`0.4.0` 起默认 `en`**，`zh` 保持旧行为。
 
 ## 路由是怎么判的
 
@@ -237,7 +246,16 @@ pdf_markdown({ path: "tests/fixtures/sample.docx" })
 
 ## 配置
 
-所有字段均可选。下面是由 [`cordis.patch.yml`](cordis.patch.yml) 插入的 `doc-router`
+所有字段均可选。
+
+| 字段 | 默认值 | 作用 |
+|---|---|---|
+| `pythonPath` | *（未设置）* | 要启动的解释器，原样采用——优先级最高 |
+| `timeoutMs` | `120000` | 探测超时（毫秒） |
+| `maxChars` | `120000` | 内联 Markdown 上限；超出时 `pdf_markdown` 会截断并明确告知 |
+| `noteLanguage` | `en` | 提示语语言：`en` 或 `zh` |
+
+下面是由 [`cordis.patch.yml`](cordis.patch.yml) 插入的 `doc-router`
 条目的 `config` 块：
 
 ```yaml
@@ -248,7 +266,7 @@ pdf_markdown({ path: "tests/fixtures/sample.docx" })
         pythonPath: C:\path\to\python.exe   # 可选；优先级最高的解释器
         timeoutMs: 120000                    # 可选；探测超时（毫秒）
         maxChars: 120000                     # 可选；内联 Markdown 上限
-        noteLanguage: zh                     # 可选；'zh'（默认）或 'en'
+        noteLanguage: en                     # 可选；'en'（默认）或 'zh'
 ```
 
 `noteLanguage` 只影响给人读的提示语。判据、`recommend`、`probe` 三个字段与语言无关，
@@ -280,15 +298,18 @@ Sci. Adv. / arXiv，2–83 页，含中文目录与文件名）上跑过：
 | `\| --- \|` 表格分隔线 | **0** | 24 |
 | 词间空格丢失 | **0** | 36（如 `constants.Theresultantcoherentgrowthof`） |
 
-同一语料上的开销与可靠性：`doc_route` 约 **0.4 秒**；`pdf_markdown` 普通论文约
-**7.7 秒**，83 页那篇 **29.7 秒**。**非 ASCII 路径**上共 72 次路由、44 次转换，
-路径失败 **0 例**。
+| 开销与可靠性（同一语料） | 实测 |
+|---|---|
+| `doc_route`，单文件 | 约 0.4 秒 |
+| `pdf_markdown`，普通论文 | 约 7.7 秒 |
+| `pdf_markdown`，83 页论文 | 约 29.7 秒 |
+| 路径失败——**非 ASCII 路径**上 72 次路由 + 44 次转换 | **0 例** |
 
 > [!NOTE]
 > 上面的交错现象可以在 clone 后用一份合成夹具复现。
 > 而本节表格用的是**真实已发表论文**——那是更严苛的检验，且这些论文无法再分发，
 > 所以其精确数字是**记录**，不是可复现的。
-> 详见 [tests/fixtures/README.md](tests/fixtures/README.md)。
+> 详见 [tests/fixtures/README.md](https://github.com/Dantwz7/dsh-doc-router/blob/main/tests/fixtures/README.md)。
 >
 > 不过语料层面的总数是**一条命令就能重跑**的：把你手上的语料交给
 > `python -B _verify/validate_routing.py --json out.json`，它会打印逐文件判据表和总数。
@@ -297,20 +318,12 @@ Sci. Adv. / arXiv，2–83 页，含中文目录与文件名）上跑过：
 
 ## 故障排查
 
-**`docprobe failed … Microsoft Store … exit code 9009`** —— `PATH` 上的 `python`
-是 Windows 应用商店的占位程序。把 `pythonPath`（或 `DOC_ROUTER_PYTHON`）指向真正的解释器。
-
-**`PyMuPDF is not installed`** —— 插件解析到的解释器不是你装 PyMuPDF 的那个。
-显式设置 `pythonPath` 即可确认它选了谁；或者装进打包运行时
-`$DSH_HOME/dsh-runtimes/` 下。注意 **DSH 升级可能覆盖该运行时的 `site-packages`**，
-届时重装 PyMuPDF。
-
-**`page selection '99' matched no pages; the document has 1 page(s)`** ——
-页码区间会按真实页数校验。请用 `"3"`、`"1-3"` 或 `"1,4,7"`。
-
-**明明是双栏却判成单栏** —— 请带上工具返回里的 `probe` 明细开 issue，
-它包含逐页的「多栏占比/栏数」证据。若能给一份**合成**的复现样本最好，
-[`tests/fixtures/generate.py`](tests/fixtures/generate.py) 是个不错的起点。
+| 你看到的现象 | 怎么办 |
+|---|---|
+| `docprobe failed … Microsoft Store … exit code 9009` | `PATH` 上的 `python` 是 Windows 应用商店的占位程序。把 `pythonPath`（或 `DOC_ROUTER_PYTHON`）指向真正的解释器。 |
+| `PyMuPDF is not installed` | 插件解析到的解释器不是你装 PyMuPDF 的那个。显式设置 `pythonPath` 即可确认它选了谁；或者装进打包运行时 `$DSH_HOME/dsh-runtimes/` 下。注意 **DSH 升级可能覆盖该运行时的 `site-packages`**，届时重装 PyMuPDF。 |
+| `page selection '99' matched no pages; the document has 1 page(s)` | 页码区间会按真实页数校验。请用 `"3"`、`"1-3"` 或 `"1,4,7"`。 |
+| 明明是双栏却判成单栏 | 请带上工具返回里的 `probe` 明细开 issue——它包含逐页的「多栏占比/栏数」证据。若能给一份**合成**的复现样本最好，[`tests/fixtures/generate.py`](https://github.com/Dantwz7/dsh-doc-router/blob/main/tests/fixtures/generate.py) 是个不错的起点。 |
 
 ## 开发
 
@@ -335,20 +348,21 @@ scripts/            夹具生成、包内容校验
 ```
 
 另有一项检查需要真实 DSH 安装：
-[`tests/manual/real-api.mjs`](tests/manual/README.md) 会用 `app.asar` 里**真实的**
+[`tests/manual/real-api.mjs`](https://github.com/Dantwz7/dsh-doc-router/blob/main/tests/manual/README.md) 会用 `app.asar` 里**真实的**
 `defineTool` 与 schemastery 驱动插件——这正是冷启动会失败的加载期表面。
 
 路由规则应当保持确定性。若你改了 `lib/docprobe.py` 里的阈值，请同时更新
 docstring 里的理由**和**上面的表格，并补一个覆盖新边界的夹具。
-不可退回项与发布流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+不可退回项与发布流程见 [CONTRIBUTING.md](https://github.com/Dantwz7/dsh-doc-router/blob/main/CONTRIBUTING.md)。
 
 ## 路线图
 
 - [x] 发布到 npm，让安装不再需要 `file:` 路径。—— **已完成：
-      [`dsh-doc-router@0.3.0`](https://www.npmjs.com/package/dsh-doc-router)
+      [`dsh-doc-router`](https://www.npmjs.com/package/dsh-doc-router)
       已上线公共 registry。**
-- [x] **本地化探测脚本的提示语。** —— **已完成**：`noteLanguage: 'en'` 可切英文提示语
-      （默认仍是 `zh`，现有安装不受影响）。两种语言都有测试断言。
+- [x] **本地化探测脚本的提示语。** —— **已完成**：`noteLanguage` 可选中英提示语，
+      且 `0.4.0` 起默认改为 `en`，与 npm 渲染的那份 README 对齐。
+      两种语言都有断言，其中一条专门验证非默认值确实传到了探测脚本。
 - [x] **让夹具真正能证明阅读顺序。** —— **已完成：**
       `two-column-reading-order.pdf` 两栏带可区分标记（`L01…L15` | `R01…R15`），
       测试断言精确序列；结果被交错、两栏互换、栏内乱序或漏栏，现在都会让构建失败。
@@ -369,8 +383,8 @@ docstring 里的理由**和**上面的表格，并补一个覆盖新边界的夹
 ## 参与贡献
 
 欢迎开 issue 和提 PR。缺陷报告里最有价值的是**该文件的完整 `doc_route` 结果**——
-[issue 模板](.github/ISSUE_TEMPLATE/bug_report.yml)要的正是这个。
-动手前请先读 [CONTRIBUTING.md](CONTRIBUTING.md) 与[行为准则](CODE_OF_CONDUCT.md)。
+[issue 模板](https://github.com/Dantwz7/dsh-doc-router/blob/main/.github/ISSUE_TEMPLATE/bug_report.yml)要的正是这个。
+动手前请先读 [CONTRIBUTING.md](https://github.com/Dantwz7/dsh-doc-router/blob/main/CONTRIBUTING.md) 与[行为准则](https://github.com/Dantwz7/dsh-doc-router/blob/main/CODE_OF_CONDUCT.md)。
 
 ## 许可证
 

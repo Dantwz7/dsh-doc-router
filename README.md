@@ -5,7 +5,7 @@
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-brightgreen.svg)](package.json)
 
-[English](README.md) | [中文](README.zh.md)
+[English](https://github.com/Dantwz7/dsh-doc-router/blob/main/README.md) | [中文](https://github.com/Dantwz7/dsh-doc-router/blob/main/README.zh.md)
 
 > **Route before you read.** A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
 > plugin that inspects a document's *real* format and a PDF's *page layout*, then hands it
@@ -29,16 +29,18 @@ PyMuPDF 1.28.2 / MarkItDown 0.2.0:
 | MarkItDown | 45 266 chars, whole document | ❌ body text fragmented into hundreds of `\| … \|` table rows |
 
 The same failure is **reproducible from a clone**. On this repository's
-[`two-column-reading-order.pdf`](tests/fixtures/two-column-reading-order.pdf) — a
-synthetic two-column page whose columns are individually marked — MarkItDown 0.1.5
-reads straight down **both** columns at once:
+[`two-column-reading-order.pdf`](https://github.com/Dantwz7/dsh-doc-router/blob/main/tests/fixtures/two-column-reading-order.pdf)
+and [`three-column.pdf`](https://github.com/Dantwz7/dsh-doc-router/blob/main/tests/fixtures/three-column.pdf)
+— synthetic pages whose columns are individually marked — MarkItDown 0.1.5 reads
+straight down **every** column at once:
 
-| | `pdf_markdown` | MarkItDown 0.1.5 |
+| Fixture | `pdf_markdown` | MarkItDown 0.1.5 |
 |---|---|---|
-| Reading order | `L01…L15`, then `R01…R15` | `L01 R01 L02 R02 …` — **29 column alternations** |
+| `two-column-reading-order.pdf` | `L01…L15`, then `R01…R15` | `L01 R01 L02 R02 …` — **29 column alternations** |
+| `three-column.pdf` | `L01…L15`, `M01…M15`, then `R01…R15` | `L01 M01 R01 L02 …` — **44 column alternations** |
 
 That is the whole argument in one line: one pipeline keeps the columns, the other
-interleaves them. `npm test` asserts the first column of that table.
+interleaves them. `npm test` asserts the reading order in both `pdf_markdown` cells.
 
 Asking a model to "just pick a converter" therefore produces quietly mangled source
 material, and the damage **looks like success**. The fix is not a better single
@@ -79,7 +81,7 @@ allowed — and a wrong path is reported as *the path you named*, not as a myste
 ### From npm (recommended)
 
 ```bash
-plugin_manager action=install_bundle target="dsh-doc-router@0.3.0"
+plugin_manager action=install_bundle target="dsh-doc-router@0.4.0"
 ```
 
 **Pin the exact version.** DSH's package manager applies a minimum-release-age
@@ -89,7 +91,7 @@ DSH afterwards.
 ### From the DSH CLI
 
 ```bash
-dsh plugin --profile <YOUR-PROFILE> add dsh-doc-router@0.3.0
+dsh plugin --profile <YOUR-PROFILE> add dsh-doc-router@0.4.0
 ```
 
 `<YOUR-PROFILE>` must be the profile DSH **actually boots**. `plugin_manager` above
@@ -103,6 +105,16 @@ subcommand does *not* do:
 - **`--help` is not a dry run.** `dsh plugin --profile <name> --help` initializes
   that profile before printing pnpm's help.
 
+### From a checkout instead
+
+```bash
+plugin_manager action=install_bundle target="file:<ABSOLUTE-PATH-TO-REPO>"
+```
+
+A `file:` install is a **copy**, so editing the source does not take effect: bump
+the version, remove the bundle, reinstall and restart DSH. See
+[CONTRIBUTING.md](https://github.com/Dantwz7/dsh-doc-router/blob/main/CONTRIBUTING.md#5-testing-against-a-real-dsh-install).
+
 ### Enable layout detection
 
 ```bash
@@ -113,20 +125,12 @@ Without PyMuPDF the plugin **still loads** and `doc_route` still classifies by
 format; only layout detection and `pdf_markdown` are disabled, and both say so
 rather than failing obscurely.
 
-### From a checkout instead
-
-```bash
-plugin_manager action=install_bundle target="file:<ABSOLUTE-PATH-TO-REPO>"
-```
-
-A `file:` install is a **copy**, so editing the source does not take effect: bump
-the version, remove the bundle, reinstall and restart DSH. See
-[CONTRIBUTING.md](CONTRIBUTING.md#5-testing-against-a-real-dsh-install).
-
 ## Quick start
 
 Route first, then convert. The examples below use this repository's own synthetic
 fixtures, so every line is reproducible from a clone.
+
+### 1. Route it
 
 ```text
 doc_route({ path: "tests/fixtures/two-column.pdf" })
@@ -137,13 +141,14 @@ doc_route({ path: "tests/fixtures/two-column.pdf" })
   If formulas, super/subscripts or digits must be exact, render that page to an image and check it
   Probe detail: {"1":"0.91/2col"}
 
-  dsh-doc-router v0.3.0
+  dsh-doc-router v0.4.0
 ```
 
-> The two advisory lines are English above because this example sets
-> `noteLanguage: 'en'`. They default to Chinese (`zh`), which is what existing
-> installs already print — see [Configuration](#configuration). The verdict line,
-> `recommend`, and `probe` fields are language-neutral either way.
+> The two advisory lines above are English because that is the **default** as of
+> `0.4.0` — see [Configuration](#configuration) for `noteLanguage: 'zh'`. The
+> verdict line, `recommend`, and `probe` fields are language-neutral either way.
+
+### 2. Convert it
 
 ```text
 pdf_markdown({ path: "tests/fixtures/two-column.pdf" })
@@ -185,10 +190,9 @@ pdf_markdown({ path: "tests/fixtures/sample.docx" })
 
 > [!NOTE]
 > **Advisory language.** The verdict line, `recommend`, and `probe` fields are
-> language-neutral. The free-text advisory lines that follow the verdict are
-> available in English and Chinese via
-> [`noteLanguage`](#configuration) — `zh` by default, so existing installs print
-> exactly what they always did.
+> language-neutral. The free-text advisory lines that follow the verdict come in
+> English or Chinese via [`noteLanguage`](#configuration) — `en` by default since
+> `0.4.0`, `zh` for the previous behaviour.
 
 ## How the routing works
 
@@ -263,8 +267,17 @@ regression-tested and written up in [CHANGELOG.md](CHANGELOG.md):
 
 ## Configuration
 
-Every field is optional. This is the `config` block of the `doc-router` entry
-inserted by [`cordis.patch.yml`](cordis.patch.yml):
+Every field is optional.
+
+| Field | Default | Effect |
+|---|---|---|
+| `pythonPath` | *(unset)* | Interpreter to spawn, taken verbatim — highest priority |
+| `timeoutMs` | `120000` | Probe timeout, milliseconds |
+| `maxChars` | `120000` | Inline Markdown cap; beyond it `pdf_markdown` truncates and says so |
+| `noteLanguage` | `en` | Language of the advisory lines: `en` or `zh` |
+
+This is the `config` block of the `doc-router` entry inserted by
+[`cordis.patch.yml`](cordis.patch.yml):
 
 ```yaml
 - insert:
@@ -274,7 +287,7 @@ inserted by [`cordis.patch.yml`](cordis.patch.yml):
         pythonPath: C:\path\to\python.exe   # optional; highest-priority interpreter
         timeoutMs: 120000                    # optional; probe timeout, ms
         maxChars: 120000                     # optional; inline Markdown cap
-        noteLanguage: zh                     # optional; 'zh' (default) or 'en'
+        noteLanguage: en                     # optional; 'en' (default) or 'zh'
 ```
 
 `noteLanguage` changes only the human-readable advisory lines. The verdict,
@@ -309,16 +322,18 @@ On one page of a Science paper, the same input through both paths:
 | `\| --- \|` table separators | **0** | 24 |
 | Word spaces lost mid-word | **0** | 36 (e.g. `constants.Theresultantcoherentgrowthof`) |
 
-Cost and reliability on the same corpus: `doc_route` took about **0.4 s**;
-`pdf_markdown` about **7.7 s** for a typical paper and **29.7 s** for an 83-page one.
-Across 72 routes and 44 conversions on **non-ASCII paths**, there were **0 path
-failures**.
+| Cost and reliability, same corpus | Measured |
+|---|---|
+| `doc_route`, per file | ~0.4 s |
+| `pdf_markdown`, typical paper | ~7.7 s |
+| `pdf_markdown`, 83-page paper | ~29.7 s |
+| Path failures — 72 routes + 44 conversions on **non-ASCII paths** | **0** |
 
 > [!NOTE]
 > The interleaving above is reproducible from a clone on a synthetic fixture. The
 > table in this section uses **real published papers** because that is the harsher
 > test — and those cannot be redistributed, so their exact numbers are recorded
-> rather than reproducible. See [tests/fixtures/README.md](tests/fixtures/README.md).
+> rather than reproducible. See [tests/fixtures/README.md](https://github.com/Dantwz7/dsh-doc-router/blob/main/tests/fixtures/README.md).
 >
 > The corpus totals are, however, **re-runnable in one command** against a corpus
 > you supply: `python -B _verify/validate_routing.py --json out.json` prints the
@@ -328,24 +343,12 @@ failures**.
 
 ## Troubleshooting
 
-**`docprobe failed … Microsoft Store … exit code 9009`** — the `python` on `PATH` is
-the Windows Store placeholder. Point `pythonPath` (or `DOC_ROUTER_PYTHON`) at a real
-interpreter.
-
-**`PyMuPDF is not installed`** — the interpreter the plugin resolved is not the one
-you installed PyMuPDF into. Set `pythonPath` explicitly to see which one it chose,
-or install into the packaged runtime under `$DSH_HOME/dsh-runtimes/`. Note that a
-**DSH upgrade can overwrite that runtime's `site-packages`**, so reinstall PyMuPDF
-afterwards.
-
-**`page selection '99' matched no pages; the document has 1 page(s)`** — the page
-range is validated against the real page count. Use `"3"`, `"1-3"` or `"1,4,7"`.
-
-**A clearly two-column paper routes as single-column** — please open an issue with
-the `probe` detail string from the tool result; it carries the per-page
-"multi-column share / column count" evidence. A **synthetic** sample that
-reproduces the problem is ideal, and [`tests/fixtures/generate.py`](tests/fixtures/generate.py)
-is a good starting point.
+| What you see | What to do |
+|---|---|
+| `docprobe failed … Microsoft Store … exit code 9009` | The `python` on `PATH` is the Windows Store placeholder. Point `pythonPath` (or `DOC_ROUTER_PYTHON`) at a real interpreter. |
+| `PyMuPDF is not installed` | The interpreter the plugin resolved is not the one you installed PyMuPDF into. Set `pythonPath` explicitly to see which one it chose, or install into the packaged runtime under `$DSH_HOME/dsh-runtimes/`. Note that a **DSH upgrade can overwrite that runtime's `site-packages`**, so reinstall PyMuPDF afterwards. |
+| `page selection '99' matched no pages; the document has 1 page(s)` | The page range is validated against the real page count. Use `"3"`, `"1-3"` or `"1,4,7"`. |
+| A clearly two-column paper routes as single-column | Open an issue with the `probe` detail string from the tool result — it carries the per-page "multi-column share / column count" evidence. A **synthetic** sample that reproduces the problem is ideal, and [`tests/fixtures/generate.py`](https://github.com/Dantwz7/dsh-doc-router/blob/main/tests/fixtures/generate.py) is a good starting point. |
 
 ## Development
 
@@ -370,23 +373,24 @@ scripts/            fixture generation, package-content verification
 ```
 
 One further check needs a real DSH installation:
-[`tests/manual/real-api.mjs`](tests/manual/README.md) drives the plugin with the
+[`tests/manual/real-api.mjs`](https://github.com/Dantwz7/dsh-doc-router/blob/main/tests/manual/README.md) drives the plugin with the
 **real** `defineTool` and schemastery out of the DSH `app.asar` — the load-time
 surface that a cold start fails on.
 
 Routing rules are meant to stay deterministic. If you change a threshold in
 `lib/docprobe.py`, update the rationale in its docstring **and** the table above, and
 add a fixture that exercises the new boundary. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the non-negotiables and the release process.
+[CONTRIBUTING.md](https://github.com/Dantwz7/dsh-doc-router/blob/main/CONTRIBUTING.md) for the non-negotiables and the release process.
 
 ## Roadmap
 
 - [x] Publish to npm so installation no longer needs a `file:` path. — **done:
-      [`dsh-doc-router@0.3.0`](https://www.npmjs.com/package/dsh-doc-router) is live
-      on the public registry.**
-- [x] **Localize the probe's advisory notes.** — **done:** `noteLanguage: 'en'`
-      selects English notes (`zh` remains the default, so existing installs are
-      unaffected). Both languages are asserted by the test suite.
+      [`dsh-doc-router`](https://www.npmjs.com/package/dsh-doc-router) is live on
+      the public registry.**
+- [x] **Localize the probe's advisory notes.** — **done:** `noteLanguage` selects
+      English or Chinese notes, and `en` became the default in `0.4.0` so the
+      notes match the README npm renders. Both languages are asserted, including
+      that a non-default value actually reaches the probe.
 - [x] **Make the fixtures prove reading order.** — **done:**
       `two-column-reading-order.pdf` carries per-column markers (`L01…L15` |
       `R01…R15`) and the suite asserts the exact sequence, so an interleaved,
@@ -414,9 +418,11 @@ add a fixture that exercises the new boundary. See
 ## Contributing
 
 Issues and pull requests are welcome. Bug reports are far more actionable with the
-full `doc_route` result for the file — the [issue template](.github/ISSUE_TEMPLATE/bug_report.yml)
-asks for exactly that. Please read [CONTRIBUTING.md](CONTRIBUTING.md) and the
-[Code of Conduct](CODE_OF_CONDUCT.md) first.
+full `doc_route` result for the file — the
+[issue template](https://github.com/Dantwz7/dsh-doc-router/blob/main/.github/ISSUE_TEMPLATE/bug_report.yml)
+asks for exactly that. Please read
+[CONTRIBUTING.md](https://github.com/Dantwz7/dsh-doc-router/blob/main/CONTRIBUTING.md) and the
+[Code of Conduct](https://github.com/Dantwz7/dsh-doc-router/blob/main/CODE_OF_CONDUCT.md) first.
 
 ## License
 

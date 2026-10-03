@@ -60,7 +60,7 @@ try {
     } catch (error) {
         say(`Config({})     : THREW -> ${error.message}`);
         failed = true;
-        config = { timeoutMs: 120_000, maxChars: 120_000, noteLanguage: 'zh' };
+        config = { timeoutMs: 120_000, maxChars: 120_000, noteLanguage: 'en' };
     }
 
     // 1b. Does the real schemastery enforce the noteLanguage enum? The stub used

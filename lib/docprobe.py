@@ -300,15 +300,16 @@ PYMUPDF_HINT = (
 # ---------------------------------------------------------------- 提示语
 #
 # 判据是确定性的、与语言无关；**提示语是给人读的**，所以两种语言都提供。
-# 默认中文，保持既有行为不变；`--lang en`（插件配置 `noteLanguage: 'en'`）切英文。
+# 默认英文：提示语随工具结果一起显示给使用者，而本项目的首要文档（npm 上的
+# README.md）是英文的。`--lang zh`（插件配置 `noteLanguage: 'zh'`）切中文。
 #
-# 为什么这不是可有可无：这些提示语会随工具结果一起显示给使用者，
-# 而 npm 上的 README.md 是英文的。早先提示语只有中文，英文 README 只能写成
+# 为什么这不是可有可无：早先提示语只有中文，英文 README 只能写成
 # 「2 行提示语已省略」——文档被迫对一个自己发出去的输出打码。
 #
 # 改这里的措辞时注意：`unknown_columns` 的文案**不能**出现「单栏」，
-# 那是一个探测不到的状态；tests/probe.integration.test.mjs 会盯着这一点。
-NOTE_LANG_DEFAULT = "zh"
+# 那是一个探测不到的状态；tests/probe.integration.test.mjs 会盯着这一点
+# （中文那一路现在必须显式 `--lang zh` 才走得到）。
+NOTE_LANG_DEFAULT = "en"
 NOTE_LANGS = ("zh", "en")
 
 _NOTES: dict[str, dict[str, str]] = {

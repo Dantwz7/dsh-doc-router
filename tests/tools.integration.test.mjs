@@ -44,7 +44,7 @@ test('doc_route recommends the layout-aware pipeline for a two-column paper', { 
     // `probe` is a JSON string of the per-page profile, for debugging a
     // misclassification. It must round-trip.
     assert.doesNotThrow(() => JSON.parse(result.probe));
-    assert.match(result.notes, /多栏|columns/);
+    assert.match(result.notes, /Multi-column body text/, 'the default notes are English');
 });
 
 test('doc_route sends a scan to the image pipeline and a one-column PDF to markitdown', { skip }, async () => {
@@ -66,7 +66,21 @@ test('doc_route sends an unmeasurable layout to pdf_markdown, not to markitdown'
     assert.equal(result.columns, 'unknown');
     assert.equal(result.text_layer, true);
     assert.deepEqual(result.recommend, ['pdf_markdown']);
-    assert.match(result.notes, /未能判定栏数/);
+    assert.match(result.notes, /could not be determined/, 'the default notes are English');
+});
+
+test('the configured noteLanguage reaches the probe', { skip }, async () => {
+    // Both sides default to English, so a JS layer that never forwarded `--lang`
+    // would still look correct through the default. Only a non-default value
+    // proves the wiring between the plugin config and the probe's argv.
+    const tool = toolNamed(
+        loadPlugin({ ...defaultConfig(), pythonPath: interpreter.python, noteLanguage: 'zh' }),
+        'doc_route',
+    );
+    const result = await tool.execute({ path: fixture('unknown-columns.pdf') }, makeExec());
+
+    assert.match(result.notes, /未能判定栏数/, 'noteLanguage: zh must reach the probe');
+    assert.doesNotMatch(result.notes, /could not be determined/);
 });
 
 test('doc_route handles Office, image and text inputs', { skip }, async () => {
