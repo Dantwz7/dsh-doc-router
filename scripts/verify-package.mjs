@@ -72,6 +72,7 @@ const DEV_ONLY_SCRIPTS = new Set([
     'fixtures',
     'verify:package',
     'verify:docs',
+    'verify:readme-facts',
 ]);
 
 /**

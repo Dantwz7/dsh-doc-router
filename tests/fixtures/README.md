@@ -38,6 +38,16 @@ fixtures that no longer test what they claim.
 | `sample.csv` / `.json` / `.html` / `.txt` | Text-ish containers, extension-mapped |
 | `magic-ole2.doc` | OLE2 header (legacy binary Office) → `ole2` |
 | `magic-plain.zip` | ZIP without any Office part → `zip` |
+| `sample.tsv` / `sample.xml` / `sample.ipynb` | `_TEXT_EXT` mappings no fixture covered → `csv` / `xml` / `ipynb` → `markitdown` |
+| `sample.md` / `sample-noext` | `.md` is not in `_TEXT_EXT`, and neither is a missing extension → plain `text` → `read` |
+| `utf16le.txt` / `utf16be.txt` / `utf16-bom.txt` | UTF-16 plain text with and without a BOM → `text` → `read` |
+| `utf32le.txt` / `utf32be.txt` | UTF-32 text; both BOMs begin with the UTF-16LE BOM's bytes |
+| `sample-empty.txt` | An empty file is still `text`, never binary |
+| `nul-bytes.bin` | All-NUL bytes: valid UTF-8 *and* valid UTF-16LE, so it pins the control-character guard → `unknown` |
+| `random-binary.bin` | A deterministic random binary that must stay `unknown` |
+| `magic-jpeg.jpg` / `magic-gif.gif` / `magic-webp.webp` | Header-only image magic bytes → `jpeg` / `gif` / `webp` → `read_image` |
+| `sample.odt` / `sample.epub` | Minimal ZIP containers for the ODF and EPUB branches → `odf` / `epub` → `markitdown` |
+| `sample.mp3` | Header-only ID3 tag → `audio` → `markitdown (needs ffmpeg)` |
 
 ## The marker fixtures (`*-reading-order`, `three-column`)
 
@@ -99,7 +109,8 @@ The expected verdict is `unknown`, **not** `multi-column`. The detector genuinel
 has no evidence of a second column; asserting one would be a guess in the other
 direction. What the fix does is refuse to overstate.
 
-Measured on this fixture (`_verify/prove-short-column-fixture.py`):
+Measured on this fixture by a maintainer-local proof script
+(`_verify/prove-short-column-fixture.py`, not part of this repository):
 
 | | pre-fix | post-fix |
 |---|---|---|
@@ -130,10 +141,11 @@ Chinese (`界面残留会显著降低器件性能`, …) instead of Latin (`Fig.
 entry is under 25 codepoints yet at least 25 latin-equivalent ones — both halves are
 asserted in `generate.py`, along with `docprobe.CJK_CHAR_WEIGHT` itself.
 
-Measured on this fixture (`_verify/prove-dense-script-fixture.py`; both halves of the
-rule — the filter *and* the `_dropped_blocks_look_like_a_column` guard — are swapped
-together, because pairing an old filter with a new guard reconstructs a version that
-never shipped):
+Measured on this fixture by a maintainer-local proof script
+(`_verify/prove-dense-script-fixture.py`, not part of this repository; both halves of
+the rule — the filter *and* the `_dropped_blocks_look_like_a_column` guard — are
+swapped together, because pairing an old filter with a new guard reconstructs a
+version that never shipped):
 
 | | pre-fix (codepoints) | post-fix (weighted) |
 |---|---|---|
@@ -158,16 +170,38 @@ discarded.
 
 ## A note on the `magic-*` fixtures
 
-`magic-ole2.doc` is **header-only** (the 8-byte OLE2 signature plus padding) and
-`magic-plain.zip` is an empty-ish zip. They are deliberately *not* valid
-documents.
+`magic-ole2.doc` is **header-only** (the 8-byte OLE2 signature plus padding),
+`magic-plain.zip` is an empty-ish zip, and `magic-jpeg.jpg` / `magic-gif.gif` /
+`magic-webp.webp` / `sample.mp3` carry only the header bytes their branch sniffs.
+They are deliberately *not* valid documents.
 
 That is the honest minimal input for the rule they test: `doc_route` classifies
 by file header, never by opening the document. Building a 512-byte file that
 genuinely is not a Word document keeps the fixture small and makes it obvious
 that only the magic-byte path is under test. Do not "fix" them into real Office
 files, and do not use them to test conversion — conversion is not what they
-cover.
+cover. `sample.png` is the deliberate exception: it is a *real* PNG, because
+`read_image` is exercised on it, not just the sniffer.
+
+## Text encodings and the binary guard
+
+Until P0-2 the sniffer only ever tried UTF-8, so a UTF-16 plain-text file fell
+into `unknown` — whose advice ("try it, then use human judgement") is actively
+misleading for a file that is simply text. `sniff_format` now checks BOMs
+(UTF-8, UTF-16LE/BE, UTF-32LE/BE) and, with no BOM, tries
+`utf-8 → utf-16-le → utf-16-be`.
+
+That change is only safe with the **control-character guard** beside it: a
+decoded sample whose non-whitespace control characters exceed 5% is rejected.
+`nul-bytes.bin` is the direct test — it is valid UTF-8 *and* valid UTF-16LE, and
+only the guard keeps it out of `text`. The order in the BOM table is
+load-bearing too: the UTF-32LE BOM (`FF FE 00 00`) starts with the UTF-16LE BOM
+(`FF FE`), so checking UTF-16 first would decode a UTF-32 file into `\ufeff`
+followed by NULs and hand it to the guard.
+
+This is a heuristic, not a proof: a binary that happens to be valid UTF-16 and
+carries few control characters can still slip through. The fixtures pin the two
+directions that matter, not every possible input.
 
 ## Regeneration is not byte-reproducible
 

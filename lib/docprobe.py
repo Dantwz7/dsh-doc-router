@@ -39,6 +39,69 @@ _IMAGE_FMTS = {"png", "jpeg", "gif", "webp"}
 _OFFICE_FMTS = {"docx", "xlsx", "pptx", "epub", "odf"}
 _TEXTY_FMTS = {"html", "csv", "json", "xml", "ipynb"}
 
+# 文本类嗅探：先按 BOM 认编码，无 BOM 时再依次试探。顺序有讲究 ——
+# UTF-32LE 的 BOM（FF FE 00 00）以 UTF-16LE 的 BOM（FF FE）开头，若先匹配
+# UTF-16 就会把一份 UTF-32 文本解成「\ufeff + 一串 NUL」，再被下面的二进制
+# 兜底判掉。所以 UTF-32 必须排在 UTF-16 前面。
+_TEXT_SAMPLE_BYTES = 4096
+_TEXT_BOMS = (
+    (b"\xff\xfe\x00\x00", "utf-32-le"),
+    (b"\x00\x00\xfe\xff", "utf-32-be"),
+    (b"\xef\xbb\xbf", "utf-8-sig"),
+    (b"\xff\xfe", "utf-16-le"),
+    (b"\xfe\xff", "utf-16-be"),
+)
+_TEXT_ENCODINGS = ("utf-8", "utf-16-le", "utf-16-be")
+
+# 解码后控制字符（`\t\n\r\f` 等合法空白除外）占比超过它，就不再当作文本。
+# 这是新增编码识别的**配套兜底**，不是可有可无的：没有它，一段恰好能解成
+# UTF-16 的二进制（例如全 NUL 字节）会被误判成文本。**这是启发式，不是证明**
+# —— 一个「恰好是合法 UTF-16 且几乎没有控制字符」的二进制仍可能漏网。
+_BINARY_CONTROL_RATIO = 0.05
+
+
+def _looks_binary(text: str) -> bool:
+    """解码后的样本是否更像二进制：控制字符（合法空白除外）比例过高。"""
+    if not text:
+        return False
+    allowed = "\t\n\r\f"
+    control = sum(
+        1
+        for ch in text
+        if (ord(ch) < 0x20 and ch not in allowed) or 0x7F <= ord(ch) <= 0x9F
+    )
+    return control / len(text) > _BINARY_CONTROL_RATIO
+
+
+def _text_encoding(sample: bytes) -> str | None:
+    """样本能解成哪种文本编码；解不出、或看着像二进制时返回 None。
+
+    先 BOM 后试探，覆盖 UTF-8 / UTF-16LE / UTF-16BE / UTF-32LE / UTF-32BE。
+    没有 BOM 的 UTF-16 纯文本此前落进 `unknown`，提示语却是「先试探，失败则
+    人工判断」——对一份纯文本文件这是误导。
+    """
+    for bom, encoding in _TEXT_BOMS:
+        if sample.startswith(bom):
+            try:
+                text = sample.decode(encoding)
+            except UnicodeDecodeError:
+                return None
+            return None if _looks_binary(text) else encoding
+    for encoding in _TEXT_ENCODINGS:
+        try:
+            text = sample.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+        # `continue`, not `return None`: NUL is valid UTF-8, so a UTF-16LE file
+        # decodes "successfully" as UTF-8 into a string that is half control
+        # characters. The guard must reject *that decoding* and let the next
+        # candidate try, or the no-BOM UTF-16 case this function exists for
+        # would still be reported as binary.
+        if _looks_binary(text):
+            continue
+        return encoding
+    return None
+
 NATIVE_ALT = {
     "docx": "python-docx",
     "xlsx": "openpyxl",
@@ -92,8 +155,10 @@ def sniff_format(path: Path) -> str:
         return "audio"
     try:
         with path.open("rb") as fh:
-            fh.read(4096).decode("utf-8")
-    except (UnicodeDecodeError, OSError):
+            sample = fh.read(_TEXT_SAMPLE_BYTES)
+    except OSError:
+        return "unknown"
+    if _text_encoding(sample) is None:
         return "unknown"
     return _TEXT_EXT.get(path.suffix.lower(), "text")
 
@@ -429,6 +494,12 @@ _NOTES: dict[str, dict[str, str]] = {
         "zh": "未知格式 → 先试探，失败则人工判断",
         "en": "Unknown format — try it, and fall back to human judgement if it fails",
     },
+    "pdf_only_refusal": {
+        "zh": "pdf_markdown 只能转换 PDF —— 检测到 {fmt}。"
+        "推荐管线：{hint}（运行 doc_route 获取完整判据）",
+        "en": "pdf_markdown only converts PDFs — detected {fmt}. "
+        "Recommended pipeline: {hint} (run doc_route for the full verdict)",
+    },
 }
 
 
@@ -553,24 +624,21 @@ def parse_pages(spec: str, page_count: int) -> list[int]:
     return sorted(p - 1 for p in picked if 1 <= p <= page_count)
 
 
-def markdown(path: Path, pages_spec: str | None) -> dict:
+def markdown(path: Path, pages_spec: str | None, lang: str = NOTE_LANG_DEFAULT) -> dict:
     """版面感知转换。**只接受真正的 PDF**。
 
     这一条不是洁癖：PyMuPDF 1.28 会把 docx / xlsx / pptx / png / txt / zip
     统统「成功打开」并报 pages=1，于是把一份 Word 文件交给本函数会静默返回
     垃圾或空内容——静默的错答案比报错危险得多。所以先用魔数确认，再给出
     该走哪条管线的建议。
+
+    `lang` 与 `route()` 同义：这条拒绝信息是**给人读的**，所以它也跟随
+    `noteLanguage`，与 `doc_route` 的提示语保持一致。
     """
     fmt = sniff_format(path)
     if fmt != "pdf":
-        hint = route(path).get("recommend") or ["markitdown"]
-        return {
-            "error": (
-                f"pdf_markdown only converts PDFs — detected {fmt}. "
-                f"Recommended pipeline: {' → '.join(hint)} "
-                "(run doc_route for the full verdict)"
-            )
-        }
+        hint = route(path, lang).get("recommend") or ["markitdown"]
+        return {"error": _note("pdf_only_refusal", lang, fmt=fmt, hint=" → ".join(hint))}
 
     try:
         import pymupdf
@@ -650,7 +718,7 @@ def main(argv: list[str]) -> int:
         if mode == "route":
             result = route(path, lang)
         elif mode == "markdown":
-            result = markdown(path, pages_spec)
+            result = markdown(path, pages_spec, lang)
         else:
             print(json.dumps({"error": f"unknown mode: {mode}"}, ensure_ascii=False))
             return 2

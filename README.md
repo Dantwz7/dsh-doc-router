@@ -81,7 +81,7 @@ allowed — and a wrong path is reported as *the path you named*, not as a myste
 ### From npm (recommended)
 
 ```bash
-plugin_manager action=install_bundle target="dsh-doc-router@0.5.0"
+plugin_manager action=install_bundle target="dsh-doc-router@0.6.0"
 ```
 
 **Pin the exact version.** DSH's package manager applies a minimum-release-age
@@ -91,7 +91,7 @@ DSH afterwards.
 ### From the DSH CLI
 
 ```bash
-dsh plugin --profile <YOUR-PROFILE> add dsh-doc-router@0.5.0
+dsh plugin --profile <YOUR-PROFILE> add dsh-doc-router@0.6.0
 ```
 
 `<YOUR-PROFILE>` must be the profile DSH **actually boots**. `plugin_manager` above
@@ -141,7 +141,7 @@ doc_route({ path: "tests/fixtures/two-column.pdf" })
   If formulas, super/subscripts or digits must be exact, render that page to an image and check it
   Probe detail: {"1":"0.91/2col"}
 
-  dsh-doc-router v0.5.0
+  dsh-doc-router v0.6.0
 ```
 
 > The two advisory lines above are English because that is the **default** as of
@@ -191,9 +191,10 @@ pdf_markdown({ path: "tests/fixtures/sample.docx" })
 
 > [!NOTE]
 > **Advisory language.** The verdict line, `recommend`, and `probe` fields are
-> language-neutral. The free-text advisory lines that follow the verdict come in
-> English or Chinese via [`noteLanguage`](#configuration) — `en` by default since
-> `0.4.0`, `zh` for the previous behaviour.
+> language-neutral. Every *human- or model-facing string* follows
+> [`noteLanguage`](#configuration) — the free-text advisory lines after the
+> verdict, `pdf_markdown`'s refusal message, and the `doc-routing` skill body.
+> `en` by default since `0.4.0`, `zh` for the previous behaviour.
 
 ## How the routing works
 
@@ -201,7 +202,7 @@ All decisions are **deterministic**: zero model calls, zero network, zero tokens
 
 | Decision | Basis |
 |---|---|
-| Format | The file header's **magic bytes**, never the extension. ZIP containers are opened to tell docx / xlsx / pptx / epub / odt apart |
+| Format | The file header's **magic bytes**, never the extension. ZIP containers are opened to tell docx / xlsx / pptx / epub / odt apart; BOM'd and BOM-less **UTF-16/UTF-32 plain text** is decoded, with a control-character guard so a binary is not mistaken for text |
 | Text layer | Fewer than **120 characters per page** ⇒ treated as a scan |
 | Single vs multi-column | Text intervals are merged per horizontal band and the segments separated by *internal* whitespace are counted. **Any body page that is multi-column makes the document multi-column.** Edge artefacts — a publisher's rotated margin stamp, headers, footers — are excluded: they are narrow but run the full page height, so they land in *every* band |
 
@@ -282,7 +283,7 @@ Every field is optional.
 | `pythonPath` | *(unset)* | Interpreter to spawn, taken verbatim — highest priority |
 | `timeoutMs` | `120000` | Probe timeout, milliseconds |
 | `maxChars` | `120000` | Inline Markdown cap; beyond it `pdf_markdown` truncates and says so |
-| `noteLanguage` | `en` | Language of the advisory lines: `en` or `zh` |
+| `noteLanguage` | `en` | Language of every human- or model-facing string — advisory notes, the `pdf_markdown` refusal, and the skill body: `en` or `zh` |
 
 This is the `config` block of the `doc-router` entry inserted by
 [`cordis.patch.yml`](cordis.patch.yml):
@@ -298,9 +299,8 @@ This is the `config` block of the `doc-router` entry inserted by
         noteLanguage: en                     # optional; 'en' (default) or 'zh'
 ```
 
-`noteLanguage` changes only the human-readable advisory lines. The verdict,
-`recommend`, and `probe` fields are language-neutral, and routing is identical in
-either language.
+`noteLanguage` changes only human-facing text. The verdict, `recommend`, and
+`probe` fields are language-neutral, and routing is identical in either language.
 
 ## Evidence
 
@@ -345,10 +345,13 @@ On one page of a Science paper, the same input through both paths:
 > rather than reproducible. See [tests/fixtures/README.md](https://github.com/Dantwz7/dsh-doc-router/blob/main/tests/fixtures/README.md).
 >
 > The corpus totals are, however, **re-runnable in one command** against a corpus
-> you supply: `python -B _verify/validate_routing.py --json out.json` prints the
-> per-file verdict table and the totals. The recorded run is kept as a per-file
-> manifest (path, size, pages, verdict, estimate, chars/page for all 71 files), so
-> the numbers can be *diffed* rather than merely believed.
+> you supply: `python -B scripts/validate-routing.py <corpus-root> --json out.json`
+> prints the per-file verdict table and the totals. The script ships with the repo
+> ([`scripts/validate-routing.py`](https://github.com/Dantwz7/dsh-doc-router/blob/main/scripts/validate-routing.py))
+> and imports the same `lib/docprobe.py` the tool uses, so it cannot disagree with
+> it. The recorded run is kept as a per-file manifest (path, size, pages, verdict,
+> estimate, chars/page for all 71 files), so the numbers can be *diffed* rather than
+> merely believed.
 
 ## Troubleshooting
 
@@ -370,6 +373,7 @@ npm test                 # unit tests run anywhere; integration tests skip witho
 npm run test:unit        # no external dependencies at all
 npm run fixtures         # regenerate tests/fixtures/ (needs Python + PyMuPDF)
 npm run verify:package   # assert what `npm publish` would upload
+npm run verify:docs      # links, anchors, structure and the README verdict table
 ```
 
 ```text
@@ -377,8 +381,8 @@ lib/index.js        the plugin: tool definitions, interpreter discovery, spawnin
 lib/docprobe.py     stdlib + PyMuPDF: format sniffing, column geometry, extraction
 cordis.patch.yml    bundle layer: inserts the plugin into the DSH composition
 tests/              node --test suite + synthetic fixtures
-scripts/            fixture generation, package-content verification
-.github/workflows/  CI
+scripts/            fixture generation, package-content and README-fact verification
+.github/workflows/  CI (unit and integration both run on Linux and Windows)
 ```
 
 One further check needs a real DSH installation:
@@ -428,6 +432,29 @@ add a fixture that exercises the new boundary. See
       **byte-identical** (0 of 71 corpus verdicts changed) while keeping Chinese
       body text. `dense-script-column.pdf` pins both halves: the Chinese column is
       recovered, and its Latin control still discards.
+- [x] **Recognise UTF-16/UTF-32 plain text.** — **done:** the sniffer only ever
+      tried UTF-8, so a UTF-16 file fell into `unknown`, whose advice ("try it,
+      then use human judgement") is actively misleading for a file that is
+      simply text. It now checks BOMs and, with none, tries
+      `utf-8 → utf-16-le → utf-16-be`, with a **control-character guard** so a
+      binary that decodes "successfully" is still rejected. `nul-bytes.bin` is
+      the direct test — it is valid UTF-8 *and* valid UTF-16LE.
+- [x] **Fail loudly on a broken probe/plugin contract.** — **done:**
+      `doc_route` used to fall back to `['markitdown']` when the probe returned
+      no `recommend` at all, dressing a broken contract up as a normal result —
+      in the one direction the asymmetric bet forbids. It now throws with the
+      probe script's path, and a test asserts nothing is returned.
+- [x] **Localize everything the model reads.** — **done:** `noteLanguage` used to
+      reach only the probe's advisory notes. `pdf_markdown`'s refusal message and
+      the whole `doc-routing` skill body (description, `whenToUse` and content)
+      now follow it too, so an English session no longer gets a Chinese skill.
+- [x] **Cover the untested format branches and machine-check the README.**
+      — **done:** 19 new fixtures (tsv / xml / ipynb / md / no-extension /
+      UTF-16 / UTF-32 / empty / two binaries / jpeg / gif / webp / odt / epub /
+      mp3) close six format branches, two of which (`odt`, `epub`) had never
+      executed in CI. `scripts/check-readme-facts.mjs` now asserts the README's
+      verdict table against `generate.py`, and the unit suite asserts the skill's
+      tool list matches the probe's `recommend` tokens.
 - [ ] Pluggable PDF backend, so a permissively licensed engine can replace PyMuPDF
       where AGPL is not an option.
 - [ ] TypeScript declarations for the exported surface.

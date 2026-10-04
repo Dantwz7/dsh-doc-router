@@ -83,6 +83,35 @@ test('the configured noteLanguage reaches the probe', { skip }, async () => {
     assert.doesNotMatch(result.notes, /could not be determined/);
 });
 
+test('pdf_markdown localizes its refusal to noteLanguage', { skip }, async () => {
+    // P0-3: the markdown branch used to spawn the probe without `--lang`, so its
+    // human-readable refusal was English whatever `noteLanguage` said. Both
+    // directions are asserted — the default alone would look correct even if the
+    // JS layer dropped the flag.
+    const zh = toolNamed(
+        loadPlugin({ ...defaultConfig(), pythonPath: interpreter.python, noteLanguage: 'zh' }),
+        'pdf_markdown',
+    );
+    await assert.rejects(
+        () => zh.execute({ path: fixture('sample.docx') }, makeExec()),
+        (error) => {
+            assert.match(error.message, /只能转换 PDF/, 'noteLanguage: zh must reach markdown mode');
+            assert.doesNotMatch(error.message, /only converts PDFs/);
+            return true;
+        },
+    );
+
+    const en = toolNamed(pluginForTests(), 'pdf_markdown');
+    await assert.rejects(
+        () => en.execute({ path: fixture('sample.docx') }, makeExec()),
+        (error) => {
+            assert.match(error.message, /only converts PDFs/);
+            assert.doesNotMatch(error.message, /[\u4e00-\u9fff]/, 'no Chinese under the en default');
+            return true;
+        },
+    );
+});
+
 test('doc_route handles Office, image and text inputs', { skip }, async () => {
     const tool = toolNamed(pluginForTests(), 'doc_route');
     const expectations = [

@@ -77,7 +77,7 @@
 ### 从 npm 安装（推荐）
 
 ```bash
-plugin_manager action=install_bundle target="dsh-doc-router@0.5.0"
+plugin_manager action=install_bundle target="dsh-doc-router@0.6.0"
 ```
 
 **请写精确版本。** DSH 的包管理器有最小发布年龄策略，只写包名可能悄悄解析到旧版本。
@@ -86,7 +86,7 @@ plugin_manager action=install_bundle target="dsh-doc-router@0.5.0"
 ### 从 DSH 命令行安装
 
 ```bash
-dsh plugin --profile <你的 profile> add dsh-doc-router@0.5.0
+dsh plugin --profile <你的 profile> add dsh-doc-router@0.6.0
 ```
 
 `<你的 profile>` 必须是 DSH **实际启动**的那个。拿不准就用上面的 `plugin_manager`，
@@ -134,7 +134,7 @@ doc_route({ path: "tests/fixtures/two-column.pdf" })
 
   Probe detail: {"1":"0.91/2col"}
 
-  dsh-doc-router v0.5.0
+  dsh-doc-router v0.6.0
 ```
 
 > 上面两行提示语是中文，因为这一段是在 `noteLanguage: 'zh'` 下跑的。**`0.4.0` 起
@@ -182,8 +182,9 @@ pdf_markdown({ path: "tests/fixtures/sample.docx" })
 
 > [!NOTE]
 > **关于提示语的语言。** 判据行、`recommend`、`probe` 三个字段与语言无关。
-> 紧随判据之后的两行自由文本提示语可用中英两种语言，由
-> [`noteLanguage`](#配置) 选择——**`0.4.0` 起默认 `en`**，`zh` 保持旧行为。
+> 所有**给人或给模型看的文本**都由 [`noteLanguage`](#配置) 选择：判据之后的
+> 自由文本提示语、`pdf_markdown` 的拒绝信息、以及 `doc-routing` 技能正文。
+> **`0.4.0` 起默认 `en`**，`zh` 保持旧行为。
 
 ## 路由是怎么判的
 
@@ -191,7 +192,7 @@ pdf_markdown({ path: "tests/fixtures/sample.docx" })
 
 | 判断 | 依据 |
 |---|---|
-| 格式 | 文件头**魔数**，从不看扩展名。ZIP 容器会进内部看目录结构，区分 docx / xlsx / pptx / epub / odt |
+| 格式 | 文件头**魔数**，从不看扩展名。ZIP 容器会进内部看目录结构，区分 docx / xlsx / pptx / epub / odt；识别带/不带 BOM 的 **UTF-16/UTF-32 纯文本**，并以控制字符比例作护栏，避免把二进制误判为文本 |
 | 有无文字层 | 字符数/页 < **120** → 视为扫描件 |
 | 单栏/多栏 | 逐条横带合并文本区间，数被「内部空白」隔开的段数；**任一正文页多栏即判多栏**。边缘块（出版商的竖排水印、页眉页脚）不计入：它们虽窄，却纵贯整页，会落进每一条横带 |
 
@@ -260,7 +261,7 @@ pdf_markdown({ path: "tests/fixtures/sample.docx" })
 | `pythonPath` | *（未设置）* | 要启动的解释器，原样采用——优先级最高 |
 | `timeoutMs` | `120000` | 探测超时（毫秒） |
 | `maxChars` | `120000` | 内联 Markdown 上限；超出时 `pdf_markdown` 会截断并明确告知 |
-| `noteLanguage` | `en` | 提示语语言：`en` 或 `zh` |
+| `noteLanguage` | `en` | 所有给人/给模型看的文本的语言——提示语、`pdf_markdown` 拒绝信息、技能正文：`en` 或 `zh` |
 
 下面是由 [`cordis.patch.yml`](cordis.patch.yml) 插入的 `doc-router`
 条目的 `config` 块：
@@ -276,7 +277,7 @@ pdf_markdown({ path: "tests/fixtures/sample.docx" })
         noteLanguage: en                     # 可选；'en'（默认）或 'zh'
 ```
 
-`noteLanguage` 只影响给人读的提示语。判据、`recommend`、`probe` 三个字段与语言无关，
+`noteLanguage` 只影响给人/给模型看的文本。判据、`recommend`、`probe` 三个字段与语言无关，
 两种语言下的路由结果完全一致。
 
 ## 实测证据
@@ -320,7 +321,10 @@ Sci. Adv. / arXiv，2–83 页，含中文目录与文件名）上跑过：
 > 详见 [tests/fixtures/README.md](https://github.com/Dantwz7/dsh-doc-router/blob/main/tests/fixtures/README.md)。
 >
 > 不过语料层面的总数是**一条命令就能重跑**的：把你手上的语料交给
-> `python -B _verify/validate_routing.py --json out.json`，它会打印逐文件判据表和总数。
+> `python -B scripts/validate-routing.py <语料目录> --json out.json`，它会打印逐文件判据表和总数。
+> 该脚本随仓库一起分发
+> （[`scripts/validate-routing.py`](https://github.com/Dantwz7/dsh-doc-router/blob/main/scripts/validate-routing.py)），
+> 导入的正是工具所用的 `lib/docprobe.py`，因此不可能给出与工具不一致的判据。
 > 当初那一次运行以**逐文件清单**的形式保留下来（71 篇的路径、大小、页数、判据、栏数估计、
 > 每页字符数），所以这些数字是**可以对差**的，而不只是「请相信」。
 
@@ -344,6 +348,7 @@ npm test                 # 单元测试到处都能跑；缺 PyMuPDF 时集成�
 npm run test:unit        # 完全没有外部依赖
 npm run fixtures         # 重新生成 tests/fixtures/（需 Python + PyMuPDF）
 npm run verify:package   # 校验 `npm publish` 实际上传了什么
+npm run verify:docs      # 校验链接、锚点、结构与 README 判据表
 ```
 
 ```text
@@ -351,8 +356,8 @@ lib/index.js        插件本体：工具定义、解释器发现、子进程启
 lib/docprobe.py     stdlib + PyMuPDF：格式嗅探、栏数几何、提取
 cordis.patch.yml    bundle 层：把插件插进 DSH 组合
 tests/              node --test 套件 + 合成夹具
-scripts/            夹具生成、包内容校验
-.github/workflows/  CI
+scripts/            夹具生成、包内容与 README 判据校验
+.github/workflows/  CI（unit 与 integration 均在 Linux 与 Windows 上跑）
 ```
 
 另有一项检查需要真实 DSH 安装：
@@ -391,6 +396,25 @@ docstring 里的理由**和**上面的表格，并补一个覆盖新边界的夹
       现在改计*拉丁等数码点*（`CJK_CHAR_WEIGHT = 2`），拉丁文本因此**逐字符不变**
       （71 篇语料 **0 篇判据变化**），而中文正文得以保留。`dense-script-column.pdf`
       同时钉住两头：中文那一栏被恢复，而它的拉丁对照仍然照旧丢弃。
+- [x] **识别 UTF-16/UTF-32 纯文本。** —— **已完成**：嗅探器过去只试 UTF-8，
+      于是 UTF-16 文件落进 `unknown`，而它的建议（「试试看，再靠人判断」）
+      对一个本身就是纯文本的文件是**误导**。现在会先查 BOM；没有 BOM 时依次试
+      `utf-8 → utf-16-le → utf-16-be`，并配一道**控制字符护栏**，
+      使「能解码成功」的二进制仍被拒绝。`nul-bytes.bin` 是直接的测试——
+      它同时是合法的 UTF-8 **和**合法的 UTF-16LE。
+- [x] **探测脚本与插件的契约破了就大声报错。** —— **已完成**：
+      过去当探测脚本完全没返回 `recommend` 时，`doc_route` 会兜底成
+      `['markitdown']`，把「契约已破」伪装成一个正常结果——而且恰是不对称下注
+      禁止的那个方向。现在直接抛错并带上探测脚本路径，且有测试断言此时不返回任何东西。
+- [x] **把模型要读的东西全部本地化。** —— **已完成**：`noteLanguage` 过去只覆盖
+      探测脚本的提示语。现在 `pdf_markdown` 的拒绝信息与整套 `doc-routing` 技能正文
+      （描述、`whenToUse`、正文）都跟随它，英文会话不会再拿到一份中文技能。
+- [x] **补齐没被覆盖的格式分支，并给 README 加机器校验。** —— **已完成**：
+      新增 19 个夹具（tsv / xml / ipynb / md / 无扩展名 / UTF-16 / UTF-32 / 空文件 /
+      两个二进制 / jpeg / gif / webp / odt / epub / mp3），补齐六个格式分支，
+      其中 `odt` 与 `epub` 两段代码此前从未在 CI 里执行过。
+      `scripts/check-readme-facts.mjs` 现在会拿 `generate.py` 校验 README 的判据表，
+      单元测试也断言技能里的工具清单与探测脚本的 `recommend` 标记一致。
 - [ ] PDF 后端可插拔，使 AGPL 不可接受的场景能换用宽松许可的引擎。
 - [ ] 为导出面补 TypeScript 类型声明。
 - [ ] 可选的扫描件 OCR 通路（目前止步于「渲染成 PNG 看图」）。

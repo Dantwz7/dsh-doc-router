@@ -36,8 +36,16 @@ jobs:
         run: npm run test:unit
 
   integration:
-    name: integration · PyMuPDF
-    runs-on: ubuntu-latest
+    name: integration · ${{ matrix.os }} · PyMuPDF
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The unit job already runs on Windows, but it uses local stubs and never
+        # starts Python. Interpreter resolution, non-ASCII paths and backslash
+        # separators are Windows-only code paths, and the development machine is
+        # Windows — so the integration job has to cover it too.
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -48,8 +56,18 @@ jobs:
           python-version: '3.12'
       - name: Install PyMuPDF
         run: pip install pymupdf4llm
-      - name: Point the plugin at the CI interpreter
+      # Windows has no `python3`, and a bare `python` can be the Microsoft Store
+      # alias. Asking the interpreter where it is (`sys.executable`) is the one
+      # answer that is true on both platforms.
+      - name: Point the plugin at the CI interpreter (Linux)
+        if: runner.os != 'Windows'
         run: echo "DOC_ROUTER_PYTHON=$(command -v python3)" >> "$GITHUB_ENV"
+      - name: Point the plugin at the CI interpreter (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $python = python -c "import sys; print(sys.executable)"
+          "DOC_ROUTER_PYTHON=$python" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Full test suite
         run: npm test
       - name: Fixtures still route as documented

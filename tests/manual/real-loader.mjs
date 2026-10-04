@@ -16,8 +16,16 @@
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
-const ASAR_DSH_ROOT =
+const RAW_ROOT =
     process.env.DSH_ASAR_DSH_ROOT ?? 'D:/1/Deepseek Harness/resources/app.asar/dsh/';
+
+// `createRequire` reads a path without a trailing separator as a *file*, so it
+// looks for `node_modules` one level up — where `@deepseek-ai/dsh-tools` does not
+// exist and every lookup silently comes back empty, which surfaces only as a
+// confusing ERR_MODULE_NOT_FOUND for the plugin's own import. Accept either
+// spelling instead of requiring the slash.
+const ASAR_DSH_ROOT =
+    RAW_ROOT.endsWith('/') || RAW_ROOT.endsWith('\\') ? RAW_ROOT : `${RAW_ROOT}/`;
 
 const require = createRequire(ASAR_DSH_ROOT);
 

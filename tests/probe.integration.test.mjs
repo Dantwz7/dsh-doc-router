@@ -152,6 +152,47 @@ test('route classifies every fixture as documented', { skip: !interpreter.availa
         { file: 'sample.html', format: 'html', recommend: ['markitdown'] },
         { file: 'magic-ole2.doc', format: 'ole2', recommend: ['markitdown'] },
         { file: 'magic-plain.zip', format: 'zip', recommend: ['markitdown', 'read'] },
+        // P1-5: format branches that had no fixture before. Text-family
+        // extensions first, then the encodings P0-2 added, then containers,
+        // images and audio.
+        { file: 'sample.tsv', format: 'csv', recommend: ['markitdown'] },
+        { file: 'sample.xml', format: 'xml', recommend: ['markitdown'] },
+        { file: 'sample.ipynb', format: 'ipynb', recommend: ['markitdown'] },
+        { file: 'sample.md', format: 'text', recommend: ['read'] },
+        { file: 'sample-noext', format: 'text', recommend: ['read'] },
+        {
+            // P0-2: UTF-16/UTF-32 text used to be `unknown`. Each script covers a
+            // BOM-less and a BOM'd file, and the UTF-32LE BOM begins with the
+            // UTF-16LE BOM's bytes, so the probe's ordering is load-bearing.
+            file: 'utf16le.txt',
+            format: 'text',
+            recommend: ['read'],
+        },
+        { file: 'utf16be.txt', format: 'text', recommend: ['read'] },
+        { file: 'utf16-bom.txt', format: 'text', recommend: ['read'] },
+        { file: 'utf32le.txt', format: 'text', recommend: ['read'] },
+        { file: 'utf32be.txt', format: 'text', recommend: ['read'] },
+        { file: 'sample-empty.txt', format: 'text', recommend: ['read'] },
+        {
+            // The control-character guard's direct case: all-NUL bytes decode
+            // cleanly as both UTF-8 and UTF-16LE, so only the guard keeps them
+            // out of `text`.
+            file: 'nul-bytes.bin',
+            format: 'unknown',
+            recommend: ['markitdown', 'read'],
+        },
+        {
+            // A deterministic random binary that must also stay `unknown`.
+            file: 'random-binary.bin',
+            format: 'unknown',
+            recommend: ['markitdown', 'read'],
+        },
+        { file: 'magic-jpeg.jpg', format: 'jpeg', recommend: ['read_image'] },
+        { file: 'magic-gif.gif', format: 'gif', recommend: ['read_image'] },
+        { file: 'magic-webp.webp', format: 'webp', recommend: ['read_image'] },
+        { file: 'sample.odt', format: 'odf', recommend: ['markitdown'] },
+        { file: 'sample.epub', format: 'epub', recommend: ['markitdown'] },
+        { file: 'sample.mp3', format: 'audio', recommend: ['markitdown (needs ffmpeg)'] },
     ];
 
     for (const expected of cases) {

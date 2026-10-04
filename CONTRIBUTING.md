@@ -210,8 +210,11 @@ Releases are cut from `main` and published to npm by a maintainer:
    itself is pre-1.0).
 3. `npm test`.
 4. **The README pass** — re-read both READMEs, run `npm run verify:docs`, and
-   improve them. See [§7.1](#71-the-readme-pass-every-release). This is a
-   standing rule, not a one-off cleanup.
+   improve them. If a corpus total or per-file verdict is quoted, re-run
+   `python -B scripts/validate-routing.py <corpus-root>` and diff its `--json`
+   output against the recorded manifest rather than trusting the totals. See
+   [§7.1](#71-the-readme-pass-every-release). This is a standing rule, not a
+   one-off cleanup.
 5. `npm run verify:package` and confirm the tarball contains exactly `lib/`,
    `cordis.patch.yml`, the READMEs, `LICENSE`, `NOTICE`, and `CHANGELOG.md` —
    no tests, no fixtures, no stray files.
@@ -243,6 +246,11 @@ That command is the mechanical half, and it runs in CI:
 * `README.md` and `README.zh.md` keep identical H2 / H3 / code-fence / table /
   `<details>` / badge counts, so the Chinese mirror cannot drift from the
   English primary.
+* the per-fixture **verdict table** in both READMEs matches
+  `tests/fixtures/generate.py` — every named fixture exists in `EXPECTED`, its
+  `est N` / `估 N 栏` equals the recorded `column_estimate`, and its pipeline cell
+  names exactly the recorded `recommend` tokens. This is item 3 below, made
+  mechanical.
 
 The editorial half is a judgement call, so it stays a checklist:
 

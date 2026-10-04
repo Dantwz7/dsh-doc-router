@@ -5,6 +5,94 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-10-04
+
+A contract-and-coverage release. **Routing verdicts are unchanged** — the full
+71-paper corpus re-runs to the same per-file table — but the places where the
+plugin could quietly paper over a broken contract now fail loudly, and the format
+branches that had no fixture are covered.
+
+### Added
+
+- **`scripts/check-readme-facts.mjs`**, wired into `verify:docs` and CI. The
+  READMEs' per-fixture verdict table was the one claim `check-doc-links.mjs` never
+  checked: renaming a fixture or moving a column estimate updated one side and
+  silently rotted the other. The script parses `EXPECTED` out of
+  `tests/fixtures/generate.py` with Node only (the `docs` CI job installs no
+  Python) and asserts, for both READMEs, that every named fixture exists in
+  `EXPECTED`, that `est N` / `估 N 栏` equals its `column_estimate`, and that the
+  pipeline cell names exactly its `recommend` tokens. It found a real gap on its
+  first run: `sample.txt`, `sample.csv`, `sample.json` and `sample.html` were
+  fixtures but had never been listed in `EXPECTED`.
+- **`scripts/validate-routing.py`**, the corpus validator the READMEs referenced but
+  the repository never contained. Both of them told readers to run
+  `_verify/validate_routing.py` — a maintainer-only path that was never committed —
+  so the "re-runnable in one command" claim could not be followed from a clone. The
+  script now ships at `scripts/validate-routing.py`, takes the corpus root as an
+  argument (the papers cannot be redistributed), imports the same `lib/docprobe.py`
+  the tool uses, and is read-only on the corpus. Run against the recorded 71-PDF
+  library it reproduces the manifest **file for file: 71 files, 0 diffs**.
+- **Nineteen fixtures for format branches that had no coverage**, generated
+  targetedly rather than by re-running `generate.py` (a full run rewrites every
+  binary, because PyMuPDF stamps each PDF with a random `/ID` and ZIP entries
+  carry timestamps): `sample.tsv` / `sample.xml` / `sample.ipynb` (the
+  `_TEXT_EXT` mappings), `sample.md` / `sample-noext` (plain text), the
+  UTF-16/UTF-32 pairs with and without a BOM, `sample-empty.txt`,
+  `nul-bytes.bin` / `random-binary.bin` (the control-character guard),
+  `magic-jpeg.jpg` / `magic-gif.gif` / `magic-webp.webp`, `sample.odt` /
+  `sample.epub` (the two `_sniff_zip` branches that had **never executed**, not
+  even in CI) and `sample.mp3`.
+- **UTF-16 and UTF-32 plain text are now recognised.** The sniffer only ever tried
+  UTF-8, so a UTF-16 file fell into `unknown` — whose advice ("try it, then use
+  human judgement") is actively misleading for a file that is simply text.
+  `sniff_format` now checks the UTF-8/UTF-16/UTF-32 BOMs and, with none, tries
+  `utf-8 → utf-16-le → utf-16-be`. The order is load-bearing: a UTF-32LE BOM
+  (`FF FE 00 00`) begins with the UTF-16LE BOM (`FF FE`).
+
+### Changed
+
+- **`doc_route` throws when the probe returns no `recommend`, instead of guessing.**
+  It used to fall back to `['markitdown']`, which dressed a broken contract up as a
+  normal result — in the one direction the asymmetric bet forbids. The error names
+  the probe script so the failure is diagnosable, and a test asserts that nothing
+  is returned in that case.
+- **`pdf_markdown`'s non-PDF refusal follows `noteLanguage`.** The probe has always
+  produced a Chinese and an English note, but this one message was hardcoded
+  English, so a `zh` session got a mixed-language result.
+- **The `doc-routing` skill body follows `noteLanguage`.** The most important text
+  the model reads was a fixed Chinese template while `noteLanguage` defaulted to
+  `en`. Description, `whenToUse` and content are now each available in both
+  languages and selected together, so an English session no longer receives a
+  Chinese skill. The English body is asserted to contain no CJK.
+- **CI's `integration` job now runs on Windows as well as Linux.** The unit job
+  already covered Windows, but it uses local stubs and never starts Python —
+  interpreter resolution, non-ASCII paths and backslash separators had zero CI
+  coverage on the platform the plugin is developed on. The interpreter is resolved
+  with `sys.executable`, because Windows has no `python3` and a bare `python` can
+  be the Microsoft Store alias.
+
+### Fixed
+
+- **`tests/manual/real-loader.mjs` no longer resolves nothing when
+  `DSH_ASAR_DSH_ROOT` is set without a trailing slash.** `createRequire` reads such
+  a path as a *file* and looks for `node_modules` one level up, where
+  `@deepseek-ai/dsh-tools` does not exist; every lookup came back empty and the only
+  symptom was an `ERR_MODULE_NOT_FOUND` for the plugin's own import. Both spellings
+  now work, so the override documented in `tests/manual/README.md` is safe to use
+  verbatim.
+
+### Notes
+
+- **The UTF-16/UTF-32 detection is a heuristic, not a proof.** A binary that
+  happens to be valid UTF-16 and carries few control characters can still slip
+  through; `nul-bytes.bin` pins the guard's direct case and `random-binary.bin` the
+  other. Both directions are asserted, not every possible input.
+- **Still unverified:** the CI matrix needs a push to GitHub to be confirmed —
+  locally only the YAML and the Windows `$env:GITHUB_ENV` step were exercised. As
+  before, how npm renders `> [!NOTE]` alerts and `<details>` remains unknown
+  (npmjs.com returns HTTP 403), and the npm package page's handling of relative
+  tarball links is unverified.
+
 ## [0.5.0] — 2026-10-03
 
 A threshold-unit release. The block filter that decides which text blocks may vote on
@@ -468,7 +556,8 @@ open-source project.
 - `lib/docprobe.py`, a stdlib + PyMuPDF probe that degrades instead of crashing
   when PyMuPDF is absent, and always answers in JSON.
 
-[Unreleased]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.2.1...v0.3.0

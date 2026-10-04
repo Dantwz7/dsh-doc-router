@@ -542,6 +542,93 @@ def build_magic_only_fixtures() -> None:
         zf.writestr("readme.txt", "A plain zip container: not an Office file.\n")
 
 
+def build_text_variants() -> None:
+    """Text-family fixtures with no library dependency.
+
+    Three groups, all pure bytes (so they regenerate byte-for-byte anywhere):
+
+    * the `_TEXT_EXT` extensions no fixture exercised (`tsv` / `xml` / `ipynb`),
+      plus `.md` and an extension-less file, which must stay plain `text`;
+    * the UTF-16 / UTF-32 encodings P0-2 added, with and without a BOM;
+    * two degenerate binaries that must stay `unknown` now that UTF-16 is tried.
+    """
+    _write_text(HERE / "sample.tsv", "model\tparams\tscore\nalpha\t1.3B\t0.81\n")
+    _write_text(
+        HERE / "sample.xml",
+        '<?xml version="1.0"?>\n<report><score>0.81</score></report>\n',
+    )
+    _write_text(
+        HERE / "sample.ipynb",
+        json.dumps({"cells": [], "nbformat": 4, "nbformat_minor": 5}, indent=2) + "\n",
+    )
+    # `.md` is deliberately *not* in `_TEXT_EXT`: markdown is already plain text,
+    # not a container that needs converting.
+    _write_text(HERE / "sample.md", "# Routing report\n\nBody paragraph.\n")
+    _write_text(HERE / "sample-noext", "Plain text with no extension.\n")
+
+    # P0-2: UTF-16 plain text used to fall into `unknown`, because the sniffer
+    # only ever tried UTF-8. The first two carry no BOM; the rest do. The probe
+    # checks UTF-32 before UTF-16 because a UTF-32LE BOM starts with FF FE.
+    text = "UTF-16 plain text needs no conversion.\nSecond line.\n"
+    (HERE / "utf16le.txt").write_bytes(text.encode("utf-16-le"))
+    (HERE / "utf16be.txt").write_bytes(text.encode("utf-16-be"))
+    (HERE / "utf16-bom.txt").write_bytes(b"\xff\xfe" + text.encode("utf-16-le"))
+    (HERE / "utf32le.txt").write_bytes(b"\xff\xfe\x00\x00" + text.encode("utf-32-le"))
+    (HERE / "utf32be.txt").write_bytes(b"\x00\x00\xfe\xff" + text.encode("utf-32-be"))
+
+    # An empty file is still text; the sniffer must not call it binary.
+    _write_text(HERE / "sample-empty.txt", "")
+
+    # Two binaries that must NOT become "text" now that UTF-16 is attempted.
+    # `nul-bytes.bin` is the direct test of the control-character guard: it
+    # decodes cleanly as *both* UTF-8 and UTF-16LE, and only the guard rejects it.
+    (HERE / "nul-bytes.bin").write_bytes(b"\x00" * 64)
+    rng = random.Random(20261004)
+    (HERE / "random-binary.bin").write_bytes(bytes(rng.randrange(256) for _ in range(256)))
+
+
+def build_minimal_image(path: Path, fmt: str) -> None:
+    """Header-only image fixtures, in the spirit of the `magic-*` files.
+
+    `doc_route` classifies images by header, so a header-only file is the honest
+    minimal input for that rule; a complete JPEG/GIF/WebP would add bytes without
+    exercising any more of it. `sample.png` stays a *real* PNG because it is also
+    fed to `read_image`.
+    """
+    headers = {
+        "jpeg": (
+            b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+            b"\xff\xd9"
+        ),
+        "gif": b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff\x3b",
+        "webp": b"RIFF\x1a\x00\x00\x00WEBPVP8 \x0e\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
+    }
+    path.write_bytes(headers[fmt])
+
+
+def build_container_fixtures() -> None:
+    """The two ZIP-container branches `_sniff_zip` has but no fixture covered.
+
+    Both are *minimal* containers: the probe reads the member names, not the
+    contents, so these carry only what the branch under test looks for.
+    """
+    import zipfile
+
+    with zipfile.ZipFile(HERE / "sample.odt", "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("mimetype", "application/vnd.oasis.opendocument.text")
+        zf.writestr("META-INF/manifest.xml", "<manifest/>")
+        zf.writestr("content.xml", "<office/>")
+
+    with zipfile.ZipFile(HERE / "sample.epub", "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("mimetype", "application/epub+zip")
+        zf.writestr("META-INF/container.xml", "<container/>")
+
+
+def build_audio_fixture() -> None:
+    """Header-only MP3 (ID3 tag): the `audio` branch, which names ffmpeg."""
+    (HERE / "sample.mp3").write_bytes(b"ID3\x04\x00\x00" + b"\x00" * 26)
+
+
 def build_office_fixtures() -> list[str]:
     """Office fixtures via their native libraries. Optional: skip if missing."""
     written: list[str] = []
@@ -596,22 +683,36 @@ def build_office_fixtures() -> list[str]:
 
 
 EXPECTED = {
-    "single-column.pdf": {"columns": "single-column", "text_layer": True},
-    "two-column.pdf": {"columns": "multi-column", "text_layer": True, "column_estimate": 2},
+    # `recommend` is asserted wherever the READMEs print a pipeline for the
+    # fixture, so `scripts/check-readme-facts.mjs` can compare the two directly.
+    "single-column.pdf": {
+        "columns": "single-column",
+        "text_layer": True,
+        "recommend": ["markitdown", "pypdf"],
+    },
+    "two-column.pdf": {
+        "columns": "multi-column",
+        "text_layer": True,
+        "column_estimate": 2,
+        "recommend": ["pdf_markdown"],
+    },
     "two-column-reading-order.pdf": {
         "columns": "multi-column",
         "text_layer": True,
         "column_estimate": 2,
+        "recommend": ["pdf_markdown"],
     },
     "three-column.pdf": {
         "columns": "multi-column",
         "text_layer": True,
         "column_estimate": 3,
+        "recommend": ["pdf_markdown"],
     },
     "two-column-watermark.pdf": {
         "columns": "multi-column",
         "text_layer": True,
         "column_estimate": 2,
+        "recommend": ["pdf_markdown"],
     },
     "unknown-columns.pdf": {
         "columns": "unknown",
@@ -629,14 +730,43 @@ EXPECTED = {
         "column_estimate": 2,
         "recommend": ["pdf_markdown"],
     },
-    "scanned.pdf": {"text_layer": False},
-    "sample.docx": {"format": "docx"},
-    "sample.xlsx": {"format": "xlsx"},
-    "sample.pptx": {"format": "pptx"},
-    "sample.png": {"format": "png"},
-    "sample.rtf": {"format": "rtf"},
-    "magic-ole2.doc": {"format": "ole2"},
-    "magic-plain.zip": {"format": "zip"},
+    "scanned.pdf": {"text_layer": False, "recommend": ["render_to_png + read_image"]},
+    "sample.docx": {"format": "docx", "recommend": ["markitdown"]},
+    "sample.xlsx": {"format": "xlsx", "recommend": ["markitdown"]},
+    "sample.pptx": {"format": "pptx", "recommend": ["markitdown"]},
+    "sample.png": {"format": "png", "recommend": ["read_image"]},
+    "sample.rtf": {"format": "rtf", "recommend": ["read"]},
+    # The original text fixtures were exercised by the integration tests but were
+    # never listed here — `check-readme-facts.mjs` found that gap, because the
+    # README prints a verdict for `sample.txt`.
+    "sample.txt": {"format": "text", "recommend": ["read"]},
+    "sample.csv": {"format": "csv", "recommend": ["markitdown"]},
+    "sample.json": {"format": "json", "recommend": ["markitdown"]},
+    "sample.html": {"format": "html", "recommend": ["markitdown"]},
+    "magic-ole2.doc": {"format": "ole2", "recommend": ["markitdown"]},
+    "magic-plain.zip": {"format": "zip", "recommend": ["markitdown", "read"]},
+    # P1-5: format branches that had no fixture. Text-family extensions first.
+    "sample.tsv": {"format": "csv", "recommend": ["markitdown"]},
+    "sample.xml": {"format": "xml", "recommend": ["markitdown"]},
+    "sample.ipynb": {"format": "ipynb", "recommend": ["markitdown"]},
+    "sample.md": {"format": "text", "recommend": ["read"]},
+    "sample-noext": {"format": "text", "recommend": ["read"]},
+    # P0-2: encodings the sniffer must now recognise, and binaries it must not.
+    "utf16le.txt": {"format": "text", "recommend": ["read"]},
+    "utf16be.txt": {"format": "text", "recommend": ["read"]},
+    "utf16-bom.txt": {"format": "text", "recommend": ["read"]},
+    "utf32le.txt": {"format": "text", "recommend": ["read"]},
+    "utf32be.txt": {"format": "text", "recommend": ["read"]},
+    "sample-empty.txt": {"format": "text", "recommend": ["read"]},
+    "nul-bytes.bin": {"format": "unknown", "recommend": ["markitdown", "read"]},
+    "random-binary.bin": {"format": "unknown", "recommend": ["markitdown", "read"]},
+    # P1-5: image, container and audio branches.
+    "magic-jpeg.jpg": {"format": "jpeg", "recommend": ["read_image"]},
+    "magic-gif.gif": {"format": "gif", "recommend": ["read_image"]},
+    "magic-webp.webp": {"format": "webp", "recommend": ["read_image"]},
+    "sample.odt": {"format": "odf", "recommend": ["markitdown"]},
+    "sample.epub": {"format": "epub", "recommend": ["markitdown"]},
+    "sample.mp3": {"format": "audio", "recommend": ["markitdown (needs ffmpeg)"]},
 }
 
 
@@ -725,7 +855,13 @@ def main(argv: list[str]) -> int:
     build_scanned(HERE / "scanned.pdf", HERE / "single-column.pdf")
     build_png(HERE / "sample.png")
     build_text_fixtures()
+    build_text_variants()
     build_magic_only_fixtures()
+    build_minimal_image(HERE / "magic-jpeg.jpg", "jpeg")
+    build_minimal_image(HERE / "magic-gif.gif", "gif")
+    build_minimal_image(HERE / "magic-webp.webp", "webp")
+    build_container_fixtures()
+    build_audio_fixture()
     office = build_office_fixtures()
 
     print(f"wrote fixtures to {HERE}")
