@@ -186,6 +186,17 @@ range expands to an upper bound of `<0.2.0-0`, which excludes `0.2.0-rc.2` even
 with `includePrerelease`. Use an open-ended range such as
 `>=0.2.0-rc.1 <0.3.0-0`.
 
+A single open-ended range is not enough on its own. node-semver accepts a
+prerelease only when some comparator carries a prerelease *and* shares its
+`[major, minor, patch]` tuple, so the range above accepts `0.2.1` while
+excluding every `0.2.1-rc.x`. Enumerate the lines that were actually run:
+
+`"dsh": ">=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-rc.1 <0.3.0-0"`
+
+Add a branch only after that line has been tested. The range is a claim about
+what was run, not a switch, and a branch nobody ran hands users a failure
+nobody saw.
+
 ## 6. Style
 
 * ESM only, 4-space indent, single quotes, semicolons — match the surrounding

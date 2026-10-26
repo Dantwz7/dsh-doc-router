@@ -5,6 +5,28 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] — 2026-10-26
+
+A compatibility-range fix. **No code changed and no verdict changed.**
+
+`engines.dsh` and the `@deepseek-ai/dsh-tools` peer declared `>=0.2.0-rc.1 <0.3.0-0`.
+Under node-semver a prerelease version satisfies a range only when some
+comparator carries a prerelease *and* shares its `[major, minor, patch]`
+tuple. That range therefore accepts `0.2.1` while silently excluding every
+prerelease of `0.2.1` — including `0.2.1-rc.3`, the DSH version this plugin
+was developed and verified on. Both fields now enumerate the tested line:
+
+`>=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-rc.1 <0.3.0-0`
+
+`0.2.2-rc.x` stays excluded until it is tested. The range is a claim about
+what was run, not a switch, so it is widened only as far as the evidence goes.
+
+### Changed
+- `engines.dsh` and the `@deepseek-ai/dsh-tools` peer now accept the `0.2.1`
+  prerelease line.
+- `CONTRIBUTING.md` §5 records the prerelease-tuple rule, so the next peer
+  range is not written as a single open-ended range.
+
 ## [0.6.0] — 2026-10-04
 
 A contract-and-coverage release. **Routing verdicts are unchanged** — the full
@@ -556,7 +578,8 @@ open-source project.
 - `lib/docprobe.py`, a stdlib + PyMuPDF probe that degrades instead of crashing
   when PyMuPDF is absent, and always answers in JSON.
 
-[Unreleased]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.3.0...v0.4.0

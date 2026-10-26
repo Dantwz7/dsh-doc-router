@@ -62,7 +62,7 @@ Every verdict is **deterministic** — no model call, no network, no token cost.
 
 | | |
 |---|---|
-| **DSH** | `>=0.2.0-rc.1 <0.3.0-0` |
+| **DSH** | `>=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-rc.1 <0.3.0-0` |
 | **Node** | `^22.19.0 || >=24.0.0` |
 | **Python** | 3.9+ — needed only for PDF layout detection and `pdf_markdown` |
 | **PyMuPDF** | `pip install pymupdf4llm` — **optional**; see [license](#license) |
@@ -81,7 +81,7 @@ allowed — and a wrong path is reported as *the path you named*, not as a myste
 ### From npm (recommended)
 
 ```bash
-plugin_manager action=install_bundle target="dsh-doc-router@0.6.0"
+plugin_manager action=install_bundle target="dsh-doc-router@0.6.1"
 ```
 
 **Pin the exact version.** DSH's package manager applies a minimum-release-age
@@ -91,7 +91,7 @@ DSH afterwards.
 ### From the DSH CLI
 
 ```bash
-dsh plugin --profile <YOUR-PROFILE> add dsh-doc-router@0.6.0
+dsh plugin --profile <YOUR-PROFILE> add dsh-doc-router@0.6.1
 ```
 
 `<YOUR-PROFILE>` must be the profile DSH **actually boots**. `plugin_manager` above
@@ -141,7 +141,7 @@ doc_route({ path: "tests/fixtures/two-column.pdf" })
   If formulas, super/subscripts or digits must be exact, render that page to an image and check it
   Probe detail: {"1":"0.91/2col"}
 
-  dsh-doc-router v0.6.0
+  dsh-doc-router v0.6.1
 ```
 
 > The two advisory lines above are English because that is the **default** as of

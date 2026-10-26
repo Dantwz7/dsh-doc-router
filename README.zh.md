@@ -58,7 +58,7 @@
 
 | | |
 |---|---|
-| **DSH** | `>=0.2.0-rc.1 <0.3.0-0` |
+| **DSH** | `>=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-rc.1 <0.3.0-0` |
 | **Node** | `^22.19.0 || >=24.0.0` |
 | **Python** | 3.9+ —— 只有 PDF 版面探测与 `pdf_markdown` 需要 |
 | **PyMuPDF** | `pip install pymupdf4llm` —— **可选**，见[许可证](#许可证) |
@@ -77,7 +77,7 @@
 ### 从 npm 安装（推荐）
 
 ```bash
-plugin_manager action=install_bundle target="dsh-doc-router@0.6.0"
+plugin_manager action=install_bundle target="dsh-doc-router@0.6.1"
 ```
 
 **请写精确版本。** DSH 的包管理器有最小发布年龄策略，只写包名可能悄悄解析到旧版本。
@@ -86,7 +86,7 @@ plugin_manager action=install_bundle target="dsh-doc-router@0.6.0"
 ### 从 DSH 命令行安装
 
 ```bash
-dsh plugin --profile <你的 profile> add dsh-doc-router@0.6.0
+dsh plugin --profile <你的 profile> add dsh-doc-router@0.6.1
 ```
 
 `<你的 profile>` 必须是 DSH **实际启动**的那个。拿不准就用上面的 `plugin_manager`，
@@ -134,7 +134,7 @@ doc_route({ path: "tests/fixtures/two-column.pdf" })
 
   Probe detail: {"1":"0.91/2col"}
 
-  dsh-doc-router v0.6.0
+  dsh-doc-router v0.6.1
 ```
 
 > 上面两行提示语是中文，因为这一段是在 `noteLanguage: 'zh'` 下跑的。**`0.4.0` 起
