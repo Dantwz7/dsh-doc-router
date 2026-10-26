@@ -679,27 +679,36 @@ def markdown(path: Path, pages_spec: str | None, lang: str = NOTE_LANG_DEFAULT) 
 
 
 def main(argv: list[str]) -> int:
+    # PyMuPDF 2.x — and the layout model it pulls in — writes banners and
+    # progress lines to stdout. The contract with the plugin is exactly one
+    # JSON object on stdout, so whatever a library prints is pushed to stderr
+    # and our payload is written through the handle saved before the swap.
+    real_stdout = sys.stdout
+    sys.stdout = sys.stderr
+
+    def emit(payload: object) -> None:
+        real_stdout.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        real_stdout.flush()
+
     if len(argv) < 2:
-        print(
-            json.dumps(
-                {
-                    "error": "usage: docprobe.py <route|markdown> <path> "
-                    "[--pages spec] [--lang zh|en]"
-                }
-            )
+        emit(
+            {
+                "error": "usage: docprobe.py <route|markdown> <path> "
+                "[--pages spec] [--lang zh|en]"
+            }
         )
         return 2
 
     mode, raw_path = argv[0], argv[1]
     path = Path(raw_path)
     if not path.exists():
-        print(json.dumps({"error": f"not found: {raw_path}"}, ensure_ascii=False))
+        emit({"error": f"not found: {raw_path}"})
         return 1
     # Checked here, not left to the opener: a directory surfaces from the
     # filesystem layer as a bare PermissionError (Windows) or IsADirectoryError,
     # which tells the caller nothing about what went wrong.
     if path.is_dir():
-        print(json.dumps({"error": f"is a directory, not a file: {raw_path}"}, ensure_ascii=False))
+        emit({"error": f"is a directory, not a file: {raw_path}"})
         return 1
 
     pages_spec = None
@@ -720,22 +729,17 @@ def main(argv: list[str]) -> int:
         elif mode == "markdown":
             result = markdown(path, pages_spec, lang)
         else:
-            print(json.dumps({"error": f"unknown mode: {mode}"}, ensure_ascii=False))
+            emit({"error": f"unknown mode: {mode}"})
             return 2
     except PageSelectionError as exc:
         # 消息本身已经是给使用者的完整说明，不再加异常类名前缀。
-        print(json.dumps({"error": str(exc)}, ensure_ascii=False))
+        emit({"error": str(exc)})
         return 1
     except Exception as exc:  # 让插件侧拿到可读原因而不是 traceback
-        print(
-            json.dumps(
-                {"error": f"{type(exc).__name__}: {exc}"},
-                ensure_ascii=False,
-            )
-        )
+        emit({"error": f"{type(exc).__name__}: {exc}"})
         return 1
 
-    print(json.dumps(result, ensure_ascii=False))
+    emit(result)
     return 0
 
 

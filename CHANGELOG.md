@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] — 2026-10-26
+
+A stdout-contract fix. **No routing verdict changed.**
+
+`pymupdf` 2.0 pulls in `pymupdf-layout` and an ONNX runtime, and those print
+banners and progress lines to stdout. The plugin spawns `lib/docprobe.py` and
+parses its stdout as exactly one JSON object, so that noise made every
+conversion fail with `Unexpected token '=', "=== Docume"... is not valid JSON`.
+
+`main()` now saves the real stdout, points `sys.stdout` at stderr for the whole
+run, and writes its own payload through the saved handle. Third-party chatter
+can no longer reach the channel the plugin parses.
+
+### Changed
+- `lib/docprobe.py` isolates library stdout: the plugin's JSON goes to the real
+  stdout, everything else goes to stderr.
+
 ## [0.6.2] — 2026-10-26
 
 An install-command fix. **No code changed and no verdict changed.**
@@ -602,7 +619,8 @@ open-source project.
 - `lib/docprobe.py`, a stdlib + PyMuPDF probe that degrades instead of crashing
   when PyMuPDF is absent, and always answers in JSON.
 
-[Unreleased]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.5.0...v0.6.0
