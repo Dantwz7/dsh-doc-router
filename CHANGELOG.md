@@ -5,6 +5,30 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] — 2026-10-26
+
+An install-command fix. **No code changed and no verdict changed.**
+
+`pymupdf4llm` 2.0 is an empty placeholder. Upstream moved the 4llm code into
+`pymupdf` 2.0 itself, and the shim exists only so that upgrading from
+`pymupdf` 1.x does not break pip. So `pip install pymupdf4llm` now installs
+nothing usable: `import pymupdf` fails, layout detection silently degrades to
+"format known, layout unknown", and the CI fixture step fails outright.
+
+Every install hint now reads `pip install -U pymupdf pymupdf4llm`. Both names
+are needed because `pymupdf` 2.0 requires Python >=3.11 while this plugin still
+supports 3.9: on 3.11+ the pair resolves to `pymupdf` 2.0 (which ships 4llm)
+plus the empty shim, and on 3.9/3.10 it resolves to `pymupdf` 1.x plus the real
+`pymupdf4llm` 1.x. One command covers both eras.
+
+Note that `pymupdf` 2.0 also pulls `pymupdf-layout`, `onnxruntime` and
+`numpy`, so a fresh install is considerably larger than it used to be.
+
+### Changed
+- `README.md`, `README.zh.md`, `CONTRIBUTING.md`, `.github/workflows/ci.yml`,
+  `tests/fixtures/generate.py` and the runtime `PYMUPDF_HINT` in
+  `lib/docprobe.py` all give the two-package install command.
+
 ## [0.6.1] — 2026-10-26
 
 A compatibility-range fix. **No code changed and no verdict changed.**
@@ -578,7 +602,8 @@ open-source project.
 - `lib/docprobe.py`, a stdlib + PyMuPDF probe that degrades instead of crashing
   when PyMuPDF is absent, and always answers in JSON.
 
-[Unreleased]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Dantwz7/dsh-doc-router/compare/v0.4.0...v0.5.0

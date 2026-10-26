@@ -47,7 +47,7 @@ Requirements:
 
 ```bash
 # Optional: enable the integration tests
-pip install pymupdf4llm
+pip install -U pymupdf pymupdf4llm
 DOC_ROUTER_PYTHON="$(command -v python3)" npm test
 ```
 

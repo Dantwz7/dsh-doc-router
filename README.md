@@ -65,7 +65,7 @@ Every verdict is **deterministic** — no model call, no network, no token cost.
 | **DSH** | `>=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-rc.1 <0.3.0-0` |
 | **Node** | `^22.19.0 || >=24.0.0` |
 | **Python** | 3.9+ — needed only for PDF layout detection and `pdf_markdown` |
-| **PyMuPDF** | `pip install pymupdf4llm` — **optional**; see [license](#license) |
+| **PyMuPDF** | `pip install -U pymupdf pymupdf4llm` — **optional**; see [license](#license) |
 
 The interpreter is looked up in this order, first hit wins:
 
@@ -118,7 +118,7 @@ the version, remove the bundle, reinstall and restart DSH. See
 ### Enable layout detection
 
 ```bash
-<the python the plugin resolved> -m pip install pymupdf4llm
+<the python the plugin resolved> -m pip install -U pymupdf pymupdf4llm
 ```
 
 Without PyMuPDF the plugin **still loads** and `doc_route` still classifies by

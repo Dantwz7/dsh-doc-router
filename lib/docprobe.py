@@ -409,7 +409,7 @@ def probe_pdf(path: Path) -> dict:
 
 PYMUPDF_HINT = (
     "Install PyMuPDF for layout-aware PDF support: "
-    '`pip install pymupdf4llm` (into the interpreter named by pythonPath).'
+    '`pip install -U pymupdf pymupdf4llm` (into the interpreter named by pythonPath).'
 )
 
 

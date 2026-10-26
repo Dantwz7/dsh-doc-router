@@ -55,7 +55,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install PyMuPDF
-        run: pip install pymupdf4llm
+        run: pip install -U pymupdf pymupdf4llm
       # Windows has no `python3`, and a bare `python` can be the Microsoft Store
       # alias. Asking the interpreter where it is (`sys.executable`) is the one
       # answer that is true on both platforms.

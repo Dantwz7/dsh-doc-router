@@ -61,7 +61,7 @@
 | **DSH** | `>=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-rc.1 <0.3.0-0` |
 | **Node** | `^22.19.0 || >=24.0.0` |
 | **Python** | 3.9+ —— 只有 PDF 版面探测与 `pdf_markdown` 需要 |
-| **PyMuPDF** | `pip install pymupdf4llm` —— **可选**，见[许可证](#许可证) |
+| **PyMuPDF** | `pip install -U pymupdf pymupdf4llm` —— **可选**，见[许可证](#许可证) |
 
 解释器查找顺序，命中即止：
 
@@ -111,7 +111,7 @@ plugin_manager action=install_bundle target="file:<仓库绝对路径>"
 ### 启用版面探测
 
 ```bash
-<插件解析到的 python> -m pip install pymupdf4llm
+<插件解析到的 python> -m pip install -U pymupdf pymupdf4llm
 ```
 
 没有 PyMuPDF 时插件**照常加载**，`doc_route` 仍能按格式判类；

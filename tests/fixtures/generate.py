@@ -838,7 +838,7 @@ def main(argv: list[str]) -> int:
     except ImportError:
         print(
             "error: PyMuPDF is required to generate the PDF fixtures.\n"
-            "       pip install pymupdf4llm",
+            "       pip install -U pymupdf pymupdf4llm",
             file=sys.stderr,
         )
         return 2
